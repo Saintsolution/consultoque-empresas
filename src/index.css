@@ -1,0 +1,55 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    @apply text-ocean-900 antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Sora', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .container-app {
+    @apply mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-12;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-brand-gradient px-7 py-3.5 text-base font-semibold text-white shadow-glow-blue transition-all duration-300 hover:scale-[1.03] hover:shadow-glow active:scale-95;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border-2 border-white/40 bg-white/10 px-7 py-3.5 text-base font-semibold text-white backdrop-blur transition-all duration-300 hover:bg-white/20 hover:scale-[1.03] active:scale-95;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border-2 border-ocean-200 bg-white px-6 py-3 text-sm font-semibold text-ocean-700 transition-all duration-300 hover:border-ocean-400 hover:bg-ocean-50 hover:scale-[1.03] active:scale-95;
+  }
+  .input-field {
+    @apply w-full rounded-xl border border-ocean-200 bg-white px-4 py-3 text-ocean-900 placeholder:text-ocean-300 transition-all duration-200 focus:border-mint-500 focus:outline-none focus:ring-4 focus:ring-mint-100;
+  }
+  .label-field {
+    @apply mb-1.5 block text-sm font-semibold text-ocean-800;
+  }
+  .section-eyebrow {
+    @apply inline-flex items-center gap-2 rounded-full bg-mint-100 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-mint-700;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-ocean-300;
+  }
+}
