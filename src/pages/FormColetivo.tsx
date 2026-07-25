@@ -530,15 +530,18 @@ export default function FormColetivo() {
                           onClick={() =>
                             updateHolder(holder.id, { plan: opt.key })
                           }
-                          className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition-all ${
+                          className={`flex min-h-[72px] flex-col items-center justify-center gap-1.5 rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition-all sm:min-h-0 sm:flex-row sm:justify-start sm:gap-2 ${
                             holder.plan === opt.key
                               ? 'border-mint-500 bg-mint-50 text-mint-700'
                               : 'border-ocean-200 bg-white text-ocean-600 hover:border-ocean-300'
                           }`}
                         >
-                          <opt.icon className="h-4 w-4" />
-                          <span>{opt.label}</span>
-                          <span className="ml-auto text-xs text-ocean-400">
+                          <span className="flex items-center gap-2">
+                            <opt.icon className="h-4 w-4" />
+                            <span>{opt.label}</span>
+                          </span>
+
+                          <span className="text-xs text-ocean-400 sm:ml-auto">
                             {opt.price}
                           </span>
                         </button>
