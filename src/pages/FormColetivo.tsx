@@ -22,21 +22,58 @@ import {
   formatCNPJ,
   formatPhone,
   onlyDigits,
-  isValidCPF,
   isValidCNPJ,
   isValidEmail,
   BULK_THRESHOLD,
 } from '@/lib/pricing';
 
 /*
- * Endereços provisórios. Depois substituímos pelos caminhos
- * definitivos publicados no n8n.
+ * Endpoint publicado do fluxo coletivo empresarial no n8n.
  */
 const WEBHOOK_URL =
   'https://n8n.saintsolution.com.br/webhook/coletivo-empresarial';
 
-const WEBHOOK_VALIDAR_RESPONSAVEL =
-  'https://n8n.saintsolution.com.br/webhook/validar-responsavel-coletivo';
+const CHAVE_INDICADOR = 'indicador_colab';
+const COOKIE_INDICADOR = 'indicador_colab';
+
+/*
+ * Liberação temporária para os testes do fluxo completo.
+ * Amanhã, ao religar o validador, estes dois indicadores devem voltar
+ * a refletir o resultado real da consulta de CPF e maioridade.
+ */
+const CPF_VALIDATION_TEMPORARILY_DISABLED = true;
+
+function getCookie(name: string): string | null {
+  const prefix = `${name}=`;
+  const cookie = document.cookie
+    .split(';')
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(prefix));
+
+  return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : null;
+}
+
+function getCodColab(): string {
+  const local = localStorage.getItem(CHAVE_INDICADOR);
+  const cookie = getCookie(COOKIE_INDICADOR);
+  const codigo = String(local || cookie || '').trim();
+
+  return /^\d{4}$/.test(codigo) ? codigo : '0001';
+}
+
+function formatBirthDateBR(date: string): string {
+  if (!date) return '';
+
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(date)) {
+    return date;
+  }
+
+  const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  return match
+    ? `${match[3]}/${match[2]}/${match[1]}`
+    : date;
+}
 
 interface HolderField {
   id: string;
@@ -72,10 +109,6 @@ export default function FormColetivo() {
   const [responsibleBirthDate, setResponsibleBirthDate] = useState('');
   const [responsibleEmail, setResponsibleEmail] = useState('');
   const [responsiblePhone, setResponsiblePhone] = useState('');
-  const [responsibleCpfValidated, setResponsibleCpfValidated] = useState(false);
-  const [checkingResponsible, setCheckingResponsible] = useState(false);
-  const [responsibleCheckError, setResponsibleCheckError] =
-    useState<string | null>(null);
   const [holders, setHolders] = useState<HolderField[]>([newHolder()]);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
@@ -91,11 +124,10 @@ export default function FormColetivo() {
   const validation = useMemo(() => {
     const errors: string[] = [];
     if (!companyName.trim()) errors.push('Informe o nome da empresa.');
-    if (!isValidCNPJ(cnpj)) errors.push('CNPJ da empresa inválido.');
+    if (cnpj && !isValidCNPJ(cnpj)) errors.push('CNPJ da empresa inválido.');
     if (!responsibleName.trim()) errors.push('Informe o nome do responsável.');
-    if (!isValidCPF(responsibleCpf)) errors.push('CPF do responsável inválido.');
-    if (!responsibleCpfValidated)
-      errors.push('Valide o CPF e a maioridade do responsável.');
+    if (onlyDigits(responsibleCpf).length !== 11)
+      errors.push('Informe os 11 dígitos do CPF do responsável.');
     if (!responsibleBirthDate)
       errors.push('Informe o nascimento do responsável.');
     if (!isValidEmail(responsibleEmail))
@@ -106,7 +138,7 @@ export default function FormColetivo() {
     const invalidHolders = holders.filter(
       (h) =>
         !h.name.trim() ||
-        !isValidCPF(h.cpf) ||
+        onlyDigits(h.cpf).length !== 11 ||
         !isValidEmail(h.email) ||
         onlyDigits(h.phone).length < 10 ||
         !h.birthDate
@@ -116,6 +148,16 @@ export default function FormColetivo() {
         `Existem ${invalidHolders.length} titular(es) com dados incompletos ou inválidos.`
       );
     }
+
+    const holderCpfs = holders.map((holder) => onlyDigits(holder.cpf));
+    const repeatedCpfs = holderCpfs.filter(
+      (cpf, index) => cpf && holderCpfs.indexOf(cpf) !== index
+    );
+
+    if (repeatedCpfs.length > 0) {
+      errors.push('Existem titulares com CPF repetido.');
+    }
+
     if (holders.length === 0) errors.push('Adicione pelo menos 1 titular.');
     return errors;
   }, [
@@ -126,7 +168,6 @@ export default function FormColetivo() {
     responsibleBirthDate,
     responsibleEmail,
     responsiblePhone,
-    responsibleCpfValidated,
     holders,
   ]);
 
@@ -146,56 +187,6 @@ export default function FormColetivo() {
     );
   }
 
-  async function validateResponsibleCpf() {
-    if (!isValidCPF(responsibleCpf) || checkingResponsible) return;
-
-    setCheckingResponsible(true);
-    setResponsibleCheckError(null);
-    setResponsibleCpfValidated(false);
-
-    try {
-      const response = await fetch(WEBHOOK_VALIDAR_RESPONSAVEL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cpf: onlyDigits(responsibleCpf),
-        }),
-      });
-
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const result = await response.json();
-
-      if (!result?.cpf_validado) {
-        throw new Error('CPF não validado.');
-      }
-
-      if (!result?.maior_idade) {
-        throw new Error('O responsável financeiro precisa ser maior de idade.');
-      }
-
-      setResponsibleCpfValidated(true);
-
-      if (!responsibleName.trim() && result.nome) {
-        setResponsibleName(String(result.nome));
-      }
-
-      if (!responsibleBirthDate && result.data_nascimento) {
-        setResponsibleBirthDate(
-          String(result.data_nascimento).slice(0, 10)
-        );
-      }
-    } catch (error) {
-      setResponsibleCheckError(
-        error instanceof Error
-          ? error.message
-          : 'Não foi possível validar o CPF.'
-      );
-    } finally {
-      setCheckingResponsible(false);
-    }
-  }
-
   function openTerms() {
     if (!isValid || submitting) return;
     setAcceptedTerms(false);
@@ -210,46 +201,46 @@ export default function FormColetivo() {
     setSubmitError(null);
 
     const agora = new Date().toISOString();
+    const codColab = getCodColab();
 
     const payload = {
       origem: 'site_consultoque_empresas',
-      origem_form: 'coletivo_empresarial',
       enviado_em: agora,
 
-      assoc_empresa: companyName.trim(),
-      assoc_cnpj: onlyDigits(cnpj),
-      assoc_nome: responsibleName.trim(),
-      assoc_cpf: onlyDigits(responsibleCpf),
-      assoc_nasc: responsibleBirthDate,
-      assoc_email: responsibleEmail.trim().toLowerCase(),
-      assoc_tel: onlyDigits(responsiblePhone),
-      assoc_cpf_validado: responsibleCpfValidated,
+      cod_colab: codColab,
+
+      nome_assoc: responsibleName.trim(),
+      cpf_assoc: onlyDigits(responsibleCpf),
+      nasc_assoc: formatBirthDateBR(responsibleBirthDate),
+      email_assoc: responsibleEmail.trim().toLowerCase(),
+      tel_assoc: onlyDigits(responsiblePhone),
+      empresa: companyName.trim(),
+      cnpj: onlyDigits(cnpj),
+
+      assoc_cpf_validado: CPF_VALIDATION_TEMPORARILY_DISABLED,
       assoc_maior_idade: true,
 
-      tit_ind: breakdown.individualCount,
-      tit_fam: breakdown.familyCount,
-      tit_total: breakdown.total,
-      vl_ind: breakdown.individualUnit,
-      vl_fam: breakdown.familyUnit,
+      qtd_individual: breakdown.individualCount,
+      qtd_familiar: breakdown.familyCount,
+      vl_individual:
+        breakdown.individualCount * breakdown.individualUnit,
+      vl_familiar: breakdown.familyCount * breakdown.familyUnit,
       vl_total: breakdown.totalMonthly,
+
       desconto_coletivo: breakdown.hasBulkDiscount,
       economia_mensal: breakdown.savings,
 
-      status_venda: 'pendente',
       termos_aceitos: true,
       termos_aceitos_em: agora,
       versao_termo: 'COLETIVO_V1',
 
       titulares: holders.map((holder) => ({
-        tipo_titular: holder.plan,
-        cod_plano: holder.plan === 'individual' ? 'c1380' : 'c1382',
-        tipo_plano: holder.plan === 'individual' ? 1380 : 1382,
-        tit_nome: holder.name.trim(),
-        tit_cpf: onlyDigits(holder.cpf),
-        tit_nasc: holder.birthDate,
-        tit_email: holder.email.trim().toLowerCase(),
-        tit_tel: onlyDigits(holder.phone),
-        status_titular: 'inativo',
+        cpf_titular: onlyDigits(holder.cpf),
+        nome_titular: holder.name.trim(),
+        nasc_titular: formatBirthDateBR(holder.birthDate),
+        email_titular: holder.email.trim().toLowerCase(),
+        tel_titular: onlyDigits(holder.phone),
+        cod_plano: holder.plan === 'individual' ? '1830' : '1832',
       })),
     };
 
@@ -362,7 +353,7 @@ export default function FormColetivo() {
                 </div>
                 <div>
                   <label className="label-field" htmlFor="cnpj">
-                    CNPJ da empresa
+                    CNPJ da empresa (opcional)
                   </label>
                   <input
                     id="cnpj"
@@ -397,41 +388,16 @@ export default function FormColetivo() {
                       type="text"
                       inputMode="numeric"
                       value={responsibleCpf}
-                      onChange={(e) => {
-                        setResponsibleCpf(formatCPF(e.target.value));
-                        setResponsibleCpfValidated(false);
-                        setResponsibleCheckError(null);
-                      }}
-                      className="input-field min-w-0 flex-1"
+                      onChange={(e) =>
+                        setResponsibleCpf(formatCPF(e.target.value))
+                      }
+                      className="input-field"
                       placeholder="000.000.000-00"
                     />
-                    <button
-                      type="button"
-                      onClick={validateResponsibleCpf}
-                      disabled={
-                        !isValidCPF(responsibleCpf) || checkingResponsible
-                      }
-                      className="rounded-xl bg-ocean-900 px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {checkingResponsible ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                      ) : responsibleCpfValidated ? (
-                        'Validado'
-                      ) : (
-                        'Validar'
-                      )}
-                    </button>
                   </div>
-                  {responsibleCheckError && (
-                    <p className="mt-2 text-xs font-semibold text-red-600">
-                      {responsibleCheckError}
-                    </p>
-                  )}
-                  {responsibleCpfValidated && (
-                    <p className="mt-2 text-xs font-semibold text-mint-700">
-                      CPF válido e responsável maior de idade.
-                    </p>
-                  )}
+                  <p className="mt-2 text-xs font-semibold text-amber-600">
+                    Validação de CPF temporariamente liberada para testes.
+                  </p>
                 </div>
                 <div>
                   <label className="label-field" htmlFor="responsibleEmail">
@@ -810,10 +776,10 @@ export default function FormColetivo() {
                   4. Pagamento e ativação
                 </h3>
                 <p className="mt-1">
-                  A inscrição será enviada com status pendente. A ativação dos
-                  serviços ocorrerá após a confirmação do pagamento e o
-                  processamento dos cadastros. A falta de pagamento poderá
-                  suspender ou inativar os acessos.
+                  A contratação será registrada como não paga. A ativação dos
+                  serviços ocorrerá após a confirmação do pagamento pelo
+                  sistema de cobrança e o processamento dos cadastros. A falta
+                  de pagamento poderá inativar os acessos.
                 </p>
 
                 <h3 className="mt-5 font-bold text-ocean-900">

@@ -3,6 +3,8 @@ import {
   Routes,
   Route,
   useLocation,
+  useNavigate,
+  useParams,
 } from 'react-router-dom';
 
 import {
@@ -20,6 +22,68 @@ import Home from '@/pages/Home';
 import FormColetivo from '@/pages/FormColetivo';
 import Admin from '@/pages/Admin';
 import Associado from '@/pages/Associado';
+
+const CHAVE_INDICADOR =
+  'indicador_colab';
+
+const COOKIE_INDICADOR =
+  'indicador_colab';
+
+function salvarIndicador(
+  indicador: string
+) {
+  localStorage.setItem(
+    CHAVE_INDICADOR,
+    indicador
+  );
+
+  const dias = 30;
+  const segundos =
+    dias * 24 * 60 * 60;
+
+  document.cookie =
+    `${COOKIE_INDICADOR}=${indicador}; ` +
+    `Max-Age=${segundos}; ` +
+    'Path=/; ' +
+    'SameSite=Lax; ' +
+    'Secure';
+}
+
+function EntradaIndicador() {
+  const {
+    indicador,
+  } = useParams();
+
+  const navigate =
+    useNavigate();
+
+  useEffect(() => {
+    const codigo =
+      String(indicador ?? '')
+        .trim();
+
+    /*
+     * Aceita somente quatro números:
+     * 0001, 0002, 0015, 1380 etc.
+     */
+    if (/^\d{4}$/.test(codigo)) {
+      salvarIndicador(codigo);
+    }
+
+    /*
+     * Retira o indicador da URL
+     * sem recarregar a página.
+     */
+    navigate('/', {
+      replace: true,
+    });
+  }, [
+    indicador,
+    navigate,
+  ]);
+
+  return <Home />;
+}
 
 function ScrollToHash() {
   const {
@@ -122,6 +186,17 @@ export default function App() {
             path="/associado"
             element={
               <Associado />
+            }
+          />
+
+          {/*
+           * Entrada por link do colaborador:
+           * empresas.consultoque.com.br/0007
+           */}
+          <Route
+            path="/:indicador"
+            element={
+              <EntradaIndicador />
             }
           />
 
