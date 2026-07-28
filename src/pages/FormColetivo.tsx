@@ -85,6 +85,15 @@ interface HolderField {
   birthDate: string;
 }
 
+interface PaymentResponse {
+  status: string;
+  message: string;
+  url_pagamento: string;
+  dt_vencimento: string;
+  dia_vencimento: string;
+  email: string;
+}
+
 function newHolder(): HolderField {
   return {
     id: crypto.randomUUID(),
@@ -115,6 +124,8 @@ export default function FormColetivo() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [paymentResponse, setPaymentResponse] =
+    useState<PaymentResponse | null>(null);
 
   const breakdown = useMemo(
     () => calculatePrice(holders.map(toHolderEntry)),
@@ -248,7 +259,34 @@ export default function FormColetivo() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const result = (await res.json().catch(() => null)) as
+        | Partial<PaymentResponse>
+        | null;
+
+      if (!res.ok) {
+        throw new Error(result?.message || `HTTP ${res.status}`);
+      }
+
+      if (
+        !result ||
+        typeof result.url_pagamento !== 'string' ||
+        !/^https?:\/\//i.test(result.url_pagamento)
+      ) {
+        throw new Error('O servidor não retornou o link do boleto.');
+      }
+
+      setPaymentResponse({
+        status: String(result.status || 'sucesso'),
+        message: String(
+          result.message ||
+            'Boleto emitido com sucesso. Enviamos também o link para seu e-mail.'
+        ),
+        url_pagamento: result.url_pagamento,
+        dt_vencimento: String(result.dt_vencimento || ''),
+        dia_vencimento: String(result.dia_vencimento || ''),
+        email: String(result.email || responsibleEmail.trim().toLowerCase()),
+      });
       setShowTerms(false);
       setSubmitted(true);
     } catch (err) {
@@ -271,12 +309,13 @@ export default function FormColetivo() {
               <CheckCircle2 className="h-9 w-9 text-mint-600" />
             </div>
             <h1 className="mt-5 font-display text-2xl font-extrabold text-ocean-900">
-              Inscrição enviada com sucesso!
+              Boleto emitido com sucesso!
             </h1>
             <p className="mt-3 text-ocean-600">
               Recebemos a inscrição coletiva de{' '}
-              <strong>{breakdown.total}</strong> titular(es). Em breve entraremos
-              em contato pelo e-mail <strong>{responsibleEmail}</strong>.
+              <strong>{breakdown.total}</strong> titular(es). O link do boleto
+              também foi enviado para{' '}
+              <strong>{paymentResponse?.email || responsibleEmail}</strong>.
             </p>
             <div className="mt-6 rounded-2xl bg-ocean-50 p-5 text-left">
               <p className="text-sm text-ocean-700">
@@ -285,15 +324,38 @@ export default function FormColetivo() {
                   R$ {breakdown.totalMonthly.toFixed(2).replace('.', ',')}
                 </strong>
               </p>
+              {paymentResponse?.dt_vencimento && (
+                <p className="mt-2 text-sm text-ocean-700">
+                  Vencimento:{' '}
+                  <strong className="text-ocean-900">
+                    {paymentResponse.dt_vencimento}
+                  </strong>
+                </p>
+              )}
               {breakdown.hasBulkDiscount && (
                 <p className="mt-1 text-xs text-mint-600">
                   Desconto coletivo aplicado ({breakdown.total} inscrições).
                 </p>
               )}
             </div>
-            <Link to="/" className="btn-primary mt-7">
-              Voltar ao início
-            </Link>
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center">
+              {paymentResponse?.url_pagamento && (
+                <a
+                  href={paymentResponse.url_pagamento}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-primary"
+                >
+                  Abrir boleto
+                </a>
+              )}
+              <Link
+                to="/"
+                className="inline-flex items-center justify-center rounded-xl border border-ocean-200 px-6 py-3 font-bold text-ocean-700 transition-colors hover:bg-ocean-50"
+              >
+                Voltar ao início
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -833,7 +895,7 @@ export default function FormColetivo() {
                     {submitting ? (
                       <>
                         <Loader2 className="h-5 w-5 animate-spin" />
-                        Enviando...
+                        Cadastrando e emitindo boleto...
                       </>
                     ) : (
                       <>
