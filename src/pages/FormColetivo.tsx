@@ -123,7 +123,6 @@ export default function FormColetivo() {
 
   const validation = useMemo(() => {
     const errors: string[] = [];
-    if (!companyName.trim()) errors.push('Informe o nome da empresa.');
     if (cnpj && !isValidCNPJ(cnpj)) errors.push('CNPJ da empresa inválido.');
     if (!responsibleName.trim()) errors.push('Informe o nome do responsável.');
     if (onlyDigits(responsibleCpf).length !== 11)
@@ -161,7 +160,6 @@ export default function FormColetivo() {
     if (holders.length === 0) errors.push('Adicione pelo menos 1 titular.');
     return errors;
   }, [
-    companyName,
     cnpj,
     responsibleName,
     responsibleCpf,
@@ -277,9 +275,8 @@ export default function FormColetivo() {
             </h1>
             <p className="mt-3 text-ocean-600">
               Recebemos a inscrição coletiva de{' '}
-              <strong>{breakdown.total}</strong> titular(es) para{' '}
-              <strong>{companyName}</strong>. Em breve entraremos em contato pelo
-              e-mail <strong>{responsibleEmail}</strong>.
+              <strong>{breakdown.total}</strong> titular(es). Em breve entraremos
+              em contato pelo e-mail <strong>{responsibleEmail}</strong>.
             </p>
             <div className="mt-6 rounded-2xl bg-ocean-50 p-5 text-left">
               <p className="text-sm text-ocean-700">
@@ -320,8 +317,8 @@ export default function FormColetivo() {
             Monte o plano coletivo da sua empresa
           </h1>
           <p className="mt-3 text-ocean-600">
-            Preencha os dados do responsável, o CNPJ da empresa e adicione os
-            titulares. O valor é calculado em tempo real.
+            Preencha os dados do responsável e adicione os titulares. Nome da
+            empresa e CNPJ são opcionais. O valor é calculado em tempo real.
           </p>
         </div>
 
@@ -340,7 +337,7 @@ export default function FormColetivo() {
               <div className="mt-6 grid gap-5 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <label className="label-field" htmlFor="companyName">
-                    Nome da empresa
+                    Nome da empresa (opcional)
                   </label>
                   <input
                     id="companyName"
@@ -348,7 +345,7 @@ export default function FormColetivo() {
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
                     className="input-field"
-                    placeholder="Razão social ou nome fantasia"
+                    placeholder="Razão social ou nome fantasia, se houver"
                   />
                 </div>
                 <div>
