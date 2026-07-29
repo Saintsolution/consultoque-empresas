@@ -127,11 +127,11 @@ function maskCPF(cpf: string): string {
 
 function escapeHtml(value: string): string {
   return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 export default function FormColetivo() {
@@ -901,9 +901,6 @@ export default function FormColetivo() {
                         </div>
                         <p className="mt-2 truncate font-display text-lg font-bold text-ocean-900">
                           {holder.name}
-                        </p>
-                        <p className="mt-1 text-sm text-ocean-500">
-                          {maskCPF(holder.cpf)} · {holder.email}
                         </p>
                       </div>
                       <div className="flex shrink-0 gap-2">
