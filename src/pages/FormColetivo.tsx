@@ -13,6 +13,9 @@ import {
   ShieldCheck,
   Info,
   AlertCircle,
+  Pencil,
+  FileText,
+  X,
 } from 'lucide-react';
 import {
   type HolderEntry,
@@ -110,6 +113,27 @@ function toHolderEntry(h: HolderField): HolderEntry {
   return { id: h.id, plan: h.plan, name: h.name, cpf: onlyDigits(h.cpf) };
 }
 
+function planLabel(plan: PlanType): string {
+  return plan === 'individual' ? 'Individual' : 'Familiar';
+}
+
+function maskCPF(cpf: string): string {
+  const digits = onlyDigits(cpf);
+
+  return digits.length === 11
+    ? `***.${digits.slice(3, 6)}.${digits.slice(6, 9)}-**`
+    : cpf;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
 export default function FormColetivo() {
   const [companyName, setCompanyName] = useState('');
   const [cnpj, setCnpj] = useState('');
@@ -118,7 +142,12 @@ export default function FormColetivo() {
   const [responsibleBirthDate, setResponsibleBirthDate] = useState('');
   const [responsibleEmail, setResponsibleEmail] = useState('');
   const [responsiblePhone, setResponsiblePhone] = useState('');
-  const [holders, setHolders] = useState<HolderField[]>([newHolder()]);
+  const [responsibleSaved, setResponsibleSaved] = useState(false);
+  const [responsibleFormError, setResponsibleFormError] =
+    useState<string | null>(null);
+  const [holders, setHolders] = useState<HolderField[]>([]);
+  const [holderDraft, setHolderDraft] = useState<HolderField | null>(null);
+  const [holderFormError, setHolderFormError] = useState<string | null>(null);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -134,30 +163,9 @@ export default function FormColetivo() {
 
   const validation = useMemo(() => {
     const errors: string[] = [];
-    if (cnpj && !isValidCNPJ(cnpj)) errors.push('CNPJ da empresa inválido.');
-    if (!responsibleName.trim()) errors.push('Informe o nome do responsável.');
-    if (onlyDigits(responsibleCpf).length !== 11)
-      errors.push('Informe os 11 dígitos do CPF do responsável.');
-    if (!responsibleBirthDate)
-      errors.push('Informe o nascimento do responsável.');
-    if (!isValidEmail(responsibleEmail))
-      errors.push('E-mail do responsável inválido.');
-    if (onlyDigits(responsiblePhone).length < 10)
-      errors.push('Telefone do responsável inválido.');
-
-    const invalidHolders = holders.filter(
-      (h) =>
-        !h.name.trim() ||
-        onlyDigits(h.cpf).length !== 11 ||
-        !isValidEmail(h.email) ||
-        onlyDigits(h.phone).length < 10 ||
-        !h.birthDate
-    );
-    if (invalidHolders.length > 0) {
-      errors.push(
-        `Existem ${invalidHolders.length} titular(es) com dados incompletos ou inválidos.`
-      );
-    }
+    if (!responsibleSaved) errors.push('Salve os dados do responsável.');
+    if (holderDraft) errors.push('Salve ou cancele o titular que está aberto.');
+    if (holders.length === 0) errors.push('Adicione pelo menos 1 titular.');
 
     const holderCpfs = holders.map((holder) => onlyDigits(holder.cpf));
     const repeatedCpfs = holderCpfs.filter(
@@ -168,32 +176,306 @@ export default function FormColetivo() {
       errors.push('Existem titulares com CPF repetido.');
     }
 
-    if (holders.length === 0) errors.push('Adicione pelo menos 1 titular.');
     return errors;
-  }, [
-    cnpj,
-    responsibleName,
-    responsibleCpf,
-    responsibleBirthDate,
-    responsibleEmail,
-    responsiblePhone,
-    holders,
-  ]);
+  }, [responsibleSaved, holderDraft, holders]);
 
   const isValid = validation.length === 0;
 
+  function saveResponsible() {
+    const errors: string[] = [];
+
+    if (cnpj && !isValidCNPJ(cnpj)) errors.push('CNPJ inválido.');
+    if (!responsibleName.trim()) errors.push('Informe o nome.');
+    if (onlyDigits(responsibleCpf).length !== 11)
+      errors.push('Informe os 11 dígitos do CPF.');
+    if (!responsibleBirthDate) errors.push('Informe o nascimento.');
+    if (!isValidEmail(responsibleEmail)) errors.push('Informe um e-mail válido.');
+    if (onlyDigits(responsiblePhone).length < 10)
+      errors.push('Informe um telefone válido.');
+
+    if (errors.length > 0) {
+      setResponsibleFormError(errors.join(' '));
+      return;
+    }
+
+    setResponsibleFormError(null);
+    setResponsibleSaved(true);
+  }
+
+  function editResponsible() {
+    setResponsibleSaved(false);
+    setResponsibleFormError(null);
+  }
+
+  function clearResponsible() {
+    setCompanyName('');
+    setCnpj('');
+    setResponsibleName('');
+    setResponsibleCpf('');
+    setResponsibleBirthDate('');
+    setResponsibleEmail('');
+    setResponsiblePhone('');
+    setResponsibleSaved(false);
+    setResponsibleFormError(null);
+  }
+
   function addHolder() {
-    setHolders((prev) => [...prev, newHolder()]);
+    if (!responsibleSaved || holderDraft) return;
+    setHolderDraft(newHolder());
+    setHolderFormError(null);
   }
 
   function removeHolder(id: string) {
-    setHolders((prev) => (prev.length > 1 ? prev.filter((h) => h.id !== id) : prev));
+    setHolders((prev) => prev.filter((holder) => holder.id !== id));
   }
 
-  function updateHolder(id: string, patch: Partial<HolderField>) {
-    setHolders((prev) =>
-      prev.map((h) => (h.id === id ? { ...h, ...patch } : h))
+  function editHolder(holder: HolderField) {
+    if (holderDraft) return;
+    setHolderDraft({ ...holder });
+    setHolderFormError(null);
+  }
+
+  function updateHolderDraft(patch: Partial<HolderField>) {
+    setHolderDraft((current) =>
+      current ? { ...current, ...patch } : current
     );
+  }
+
+  function cancelHolder() {
+    setHolderDraft(null);
+    setHolderFormError(null);
+  }
+
+  function saveHolder() {
+    if (!holderDraft) return;
+
+    const errors: string[] = [];
+    if (!holderDraft.name.trim()) errors.push('Informe o nome.');
+    if (onlyDigits(holderDraft.cpf).length !== 11)
+      errors.push('Informe os 11 dígitos do CPF.');
+    if (!holderDraft.birthDate) errors.push('Informe o nascimento.');
+    if (!isValidEmail(holderDraft.email)) errors.push('Informe um e-mail válido.');
+    if (onlyDigits(holderDraft.phone).length < 10)
+      errors.push('Informe um telefone válido.');
+
+    const repeatedCpf = holders.some(
+      (holder) =>
+        holder.id !== holderDraft.id &&
+        onlyDigits(holder.cpf) === onlyDigits(holderDraft.cpf)
+    );
+    if (repeatedCpf) errors.push('Este CPF já está no grupo.');
+
+    if (errors.length > 0) {
+      setHolderFormError(errors.join(' '));
+      return;
+    }
+
+    setHolders((current) => {
+      const alreadyExists = current.some(
+        (holder) => holder.id === holderDraft.id
+      );
+
+      return alreadyExists
+        ? current.map((holder) =>
+            holder.id === holderDraft.id ? holderDraft : holder
+          )
+        : [...current, holderDraft];
+    });
+    setHolderDraft(null);
+    setHolderFormError(null);
+  }
+
+  function generateGroupPdf() {
+    if (!isValid) return;
+
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+
+    if (!printWindow) {
+      setSubmitError(
+        'O navegador bloqueou a janela do PDF. Autorize pop-ups e tente novamente.'
+      );
+      return;
+    }
+
+    const holderRows = holders
+      .map(
+        (holder, index) => `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${escapeHtml(holder.name.trim())}</td>
+            <td>${escapeHtml(maskCPF(holder.cpf))}</td>
+            <td>${escapeHtml(formatBirthDateBR(holder.birthDate))}</td>
+            <td>${escapeHtml(holder.email.trim().toLowerCase())}</td>
+            <td>${escapeHtml(formatPhone(holder.phone))}</td>
+            <td>${planLabel(holder.plan)}</td>
+          </tr>
+        `
+      )
+      .join('');
+
+    const companyRows =
+      companyName.trim() || cnpj
+        ? `
+          <div class="data-grid">
+            ${
+              companyName.trim()
+                ? `<div><span>Empresa</span><strong>${escapeHtml(
+                    companyName.trim()
+                  )}</strong></div>`
+                : ''
+            }
+            ${
+              cnpj
+                ? `<div><span>CNPJ</span><strong>${escapeHtml(cnpj)}</strong></div>`
+                : ''
+            }
+          </div>
+        `
+        : '';
+
+    printWindow.document.write(`
+      <!doctype html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8" />
+          <title>Relação prévia do plano coletivo</title>
+          <style>
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              padding: 32px;
+              color: #12324a;
+              font-family: Arial, Helvetica, sans-serif;
+              background: #fff;
+            }
+            h1 { margin: 0; color: #0b4267; font-size: 26px; }
+            h2 { margin: 28px 0 10px; color: #0b4267; font-size: 17px; }
+            .subtitle { margin: 8px 0 24px; color: #557086; font-size: 13px; }
+            .data-grid {
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 10px;
+              margin-top: 10px;
+            }
+            .data-grid div {
+              border: 1px solid #d9e6ee;
+              border-radius: 8px;
+              padding: 10px;
+            }
+            .data-grid span {
+              display: block;
+              margin-bottom: 4px;
+              color: #668096;
+              font-size: 10px;
+              font-weight: bold;
+              text-transform: uppercase;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              font-size: 11px;
+            }
+            th, td {
+              border: 1px solid #d9e6ee;
+              padding: 8px 6px;
+              text-align: left;
+              vertical-align: top;
+            }
+            th { color: #0b4267; background: #eef8fb; }
+            .summary {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 10px;
+              margin-top: 20px;
+            }
+            .summary div {
+              border-radius: 8px;
+              padding: 12px;
+              color: #0b4267;
+              background: #eafaf5;
+            }
+            .summary span { display: block; font-size: 10px; }
+            .summary strong { display: block; margin-top: 4px; font-size: 16px; }
+            .notice {
+              margin-top: 24px;
+              padding-top: 12px;
+              border-top: 1px solid #d9e6ee;
+              color: #668096;
+              font-size: 10px;
+            }
+            @media print {
+              body { padding: 0; }
+              @page { size: A4 landscape; margin: 12mm; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>ConsulToque — Relação prévia do plano coletivo</h1>
+          <p class="subtitle">
+            Gerado em ${new Date().toLocaleString('pt-BR')} · Indicador:
+            ${escapeHtml(getCodColab())}
+          </p>
+
+          ${companyRows}
+
+          <h2>Responsável financeiro</h2>
+          <div class="data-grid">
+            <div><span>Nome</span><strong>${escapeHtml(
+              responsibleName.trim()
+            )}</strong></div>
+            <div><span>CPF</span><strong>${escapeHtml(
+              maskCPF(responsibleCpf)
+            )}</strong></div>
+            <div><span>Nascimento</span><strong>${escapeHtml(
+              formatBirthDateBR(responsibleBirthDate)
+            )}</strong></div>
+            <div><span>E-mail</span><strong>${escapeHtml(
+              responsibleEmail.trim().toLowerCase()
+            )}</strong></div>
+            <div><span>Telefone</span><strong>${escapeHtml(
+              formatPhone(responsiblePhone)
+            )}</strong></div>
+          </div>
+
+          <h2>Titulares</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Nome</th>
+                <th>CPF</th>
+                <th>Nascimento</th>
+                <th>E-mail</th>
+                <th>Telefone</th>
+                <th>Plano</th>
+              </tr>
+            </thead>
+            <tbody>${holderRows}</tbody>
+          </table>
+
+          <div class="summary">
+            <div><span>Individuais</span><strong>${breakdown.individualCount}</strong></div>
+            <div><span>Familiares</span><strong>${breakdown.familyCount}</strong></div>
+            <div><span>Total</span><strong>${breakdown.total}</strong></div>
+            <div><span>Valor mensal</span><strong>R$ ${breakdown.totalMonthly
+              .toFixed(2)
+              .replace('.', ',')}</strong></div>
+          </div>
+
+          <p class="notice">
+            Documento de conferência gerado antes da contratação. Esta relação
+            não confirma pagamento nem ativação dos serviços.
+          </p>
+          <script>
+            window.addEventListener('load', function () {
+              setTimeout(function () { window.print(); }, 250);
+            });
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    setSubmitError(null);
   }
 
   function openTerms() {
@@ -393,113 +675,183 @@ export default function FormColetivo() {
           <div className="space-y-8">
             {/* Company + responsible */}
             <section className="rounded-3xl border border-ocean-100 bg-white p-6 shadow-card sm:p-8">
-              <h2 className="font-display text-xl font-bold text-ocean-900">
-                1. Dados da empresa e do responsável
-              </h2>
-              <div className="mt-6 grid gap-5 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <label className="label-field" htmlFor="companyName">
-                    Nome da empresa (opcional)
-                  </label>
-                  <input
-                    id="companyName"
-                    type="text"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    className="input-field"
-                    placeholder="Razão social ou nome fantasia, se houver"
-                  />
-                </div>
-                <div>
-                  <label className="label-field" htmlFor="cnpj">
-                    CNPJ da empresa (opcional)
-                  </label>
-                  <input
-                    id="cnpj"
-                    type="text"
-                    inputMode="numeric"
-                    value={cnpj}
-                    onChange={(e) => setCnpj(formatCNPJ(e.target.value))}
-                    className="input-field"
-                    placeholder="00.000.000/0000-00"
-                  />
-                </div>
-                <div>
-                  <label className="label-field" htmlFor="responsibleName">
-                    Nome do responsável pelo pagamento
-                  </label>
-                  <input
-                    id="responsibleName"
-                    type="text"
-                    value={responsibleName}
-                    onChange={(e) => setResponsibleName(e.target.value)}
-                    className="input-field"
-                    placeholder="Nome completo"
-                  />
-                </div>
-                <div>
-                  <label className="label-field" htmlFor="responsibleCpf">
-                    CPF do responsável
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      id="responsibleCpf"
-                      type="text"
-                      inputMode="numeric"
-                      value={responsibleCpf}
-                      onChange={(e) =>
-                        setResponsibleCpf(formatCPF(e.target.value))
-                      }
-                      className="input-field"
-                      placeholder="000.000.000-00"
-                    />
-                  </div>
-                  <p className="mt-2 text-xs font-semibold text-amber-600">
-                    Validação de CPF temporariamente liberada para testes.
-                  </p>
-                </div>
-                <div>
-                  <label className="label-field" htmlFor="responsibleEmail">
-                    E-mail do responsável
-                  </label>
-                  <input
-                    id="responsibleEmail"
-                    type="email"
-                    value={responsibleEmail}
-                    onChange={(e) => setResponsibleEmail(e.target.value)}
-                    className="input-field"
-                    placeholder="responsavel@empresa.com"
-                  />
-                </div>
-                <div>
-                  <label className="label-field" htmlFor="responsiblePhone">
-                    Telefone do responsável
-                  </label>
-                  <input
-                    id="responsiblePhone"
-                    type="tel"
-                    inputMode="numeric"
-                    value={responsiblePhone}
-                    onChange={(e) =>
-                      setResponsiblePhone(formatPhone(e.target.value))
-                    }
-                    className="input-field"
-                    placeholder="(00) 00000-0000"
-                  />
-                </div>
-                <div>
-                  <label className="label-field" htmlFor="responsibleBirthDate">
-                    Nascimento do responsável
-                  </label>
-                  <input
-                    id="responsibleBirthDate"
-                    type="date"
-                    value={responsibleBirthDate}
-                    onChange={(e) => setResponsibleBirthDate(e.target.value)}
-                    className="input-field"
-                  />
-                </div>
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="font-display text-xl font-bold text-ocean-900">
+                  1. Responsável pelo grupo
+                </h2>
+                {responsibleSaved && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-mint-50 px-3 py-1 text-xs font-bold text-mint-700">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Salvo
+                  </span>
+                )}
               </div>
+
+              {!responsibleSaved ? (
+                <div className="mt-6">
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <label className="label-field" htmlFor="companyName">
+                        Nome da empresa (opcional)
+                      </label>
+                      <input
+                        id="companyName"
+                        type="text"
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
+                        className="input-field"
+                        placeholder="Razão social ou nome fantasia, se houver"
+                      />
+                    </div>
+                    <div>
+                      <label className="label-field" htmlFor="cnpj">
+                        CNPJ da empresa (opcional)
+                      </label>
+                      <input
+                        id="cnpj"
+                        type="text"
+                        inputMode="numeric"
+                        value={cnpj}
+                        onChange={(e) => setCnpj(formatCNPJ(e.target.value))}
+                        className="input-field"
+                        placeholder="00.000.000/0000-00"
+                      />
+                    </div>
+                    <div>
+                      <label className="label-field" htmlFor="responsibleName">
+                        Nome do responsável pelo pagamento
+                      </label>
+                      <input
+                        id="responsibleName"
+                        type="text"
+                        value={responsibleName}
+                        onChange={(e) => setResponsibleName(e.target.value)}
+                        className="input-field"
+                        placeholder="Nome completo"
+                      />
+                    </div>
+                    <div>
+                      <label className="label-field" htmlFor="responsibleCpf">
+                        CPF do responsável
+                      </label>
+                      <input
+                        id="responsibleCpf"
+                        type="text"
+                        inputMode="numeric"
+                        value={responsibleCpf}
+                        onChange={(e) =>
+                          setResponsibleCpf(formatCPF(e.target.value))
+                        }
+                        className="input-field"
+                        placeholder="000.000.000-00"
+                      />
+                      <p className="mt-2 text-xs font-semibold text-amber-600">
+                        Validação de CPF temporariamente liberada para testes.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="label-field" htmlFor="responsibleEmail">
+                        E-mail do responsável
+                      </label>
+                      <input
+                        id="responsibleEmail"
+                        type="email"
+                        value={responsibleEmail}
+                        onChange={(e) => setResponsibleEmail(e.target.value)}
+                        className="input-field"
+                        placeholder="responsavel@empresa.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="label-field" htmlFor="responsiblePhone">
+                        Telefone do responsável
+                      </label>
+                      <input
+                        id="responsiblePhone"
+                        type="tel"
+                        inputMode="numeric"
+                        value={responsiblePhone}
+                        onChange={(e) =>
+                          setResponsiblePhone(formatPhone(e.target.value))
+                        }
+                        className="input-field"
+                        placeholder="(00) 00000-0000"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        className="label-field"
+                        htmlFor="responsibleBirthDate"
+                      >
+                        Nascimento do responsável
+                      </label>
+                      <input
+                        id="responsibleBirthDate"
+                        type="date"
+                        value={responsibleBirthDate}
+                        onChange={(e) => setResponsibleBirthDate(e.target.value)}
+                        className="input-field"
+                      />
+                    </div>
+                  </div>
+
+                  {responsibleFormError && (
+                    <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-600">
+                      {responsibleFormError}
+                    </p>
+                  )}
+
+                  <div className="mt-6 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={saveResponsible}
+                      className="btn-primary"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      Salvar responsável
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-5 rounded-2xl border border-mint-200 bg-mint-50/50 p-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-display text-lg font-bold text-ocean-900">
+                        {responsibleName}
+                      </p>
+                      {companyName && (
+                        <p className="mt-1 text-sm font-semibold text-ocean-600">
+                          {companyName}
+                        </p>
+                      )}
+                      <p className="mt-2 text-sm text-ocean-600">
+                        {maskCPF(responsibleCpf)} · {responsibleEmail}
+                      </p>
+                      <p className="mt-1 text-sm text-ocean-500">
+                        {responsiblePhone}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={editResponsible}
+                        className="inline-flex items-center gap-2 rounded-xl border border-ocean-200 bg-white px-4 py-2 text-sm font-bold text-ocean-700 hover:bg-ocean-50"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearResponsible}
+                        className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Limpar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </section>
 
             {/* Holders */}
@@ -511,7 +863,8 @@ export default function FormColetivo() {
                 <button
                   type="button"
                   onClick={addHolder}
-                  className="inline-flex items-center gap-2 rounded-full bg-brand-gradient px-4 py-2 text-sm font-semibold text-white shadow-glow-blue transition-transform hover:scale-105"
+                  disabled={!responsibleSaved || !!holderDraft}
+                  className="inline-flex items-center gap-2 rounded-full bg-brand-gradient px-4 py-2 text-sm font-semibold text-white shadow-glow-blue transition-transform enabled:hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Plus className="h-4 w-4" />
                   Adicionar titular
@@ -519,29 +872,89 @@ export default function FormColetivo() {
               </div>
 
               <div className="mt-6 space-y-4">
+                {holders.length === 0 && !holderDraft && (
+                  <div className="rounded-2xl border border-dashed border-ocean-200 bg-ocean-50/50 p-6 text-center">
+                    <p className="font-semibold text-ocean-700">
+                      Nenhum titular salvo.
+                    </p>
+                    <p className="mt-1 text-sm text-ocean-500">
+                      Salve o responsável e use “Adicionar titular”.
+                    </p>
+                  </div>
+                )}
+
                 {holders.map((holder, idx) => (
+                  holderDraft?.id === holder.id ? null : (
                   <div
                     key={holder.id}
-                    className="rounded-2xl border border-ocean-100 bg-ocean-50/50 p-5"
+                    className="rounded-2xl border border-ocean-100 bg-ocean-50/50 p-4 sm:p-5"
                   >
-                    <div className="flex items-center justify-between">
-                      <p className="font-display text-sm font-bold text-ocean-700">
-                        Titular #{idx + 1}
-                      </p>
-                      {holders.length > 1 && (
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-display text-xs font-black uppercase tracking-wide text-ocean-500">
+                            Titular #{idx + 1}
+                          </p>
+                          <span className="rounded-full bg-mint-100 px-2.5 py-1 text-xs font-bold text-mint-700">
+                            {planLabel(holder.plan)}
+                          </span>
+                        </div>
+                        <p className="mt-2 truncate font-display text-lg font-bold text-ocean-900">
+                          {holder.name}
+                        </p>
+                        <p className="mt-1 text-sm text-ocean-500">
+                          {maskCPF(holder.cpf)} · {holder.email}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => editHolder(holder)}
+                          disabled={!!holderDraft}
+                          className="inline-flex items-center gap-2 rounded-xl border border-ocean-200 bg-white px-3 py-2 text-sm font-bold text-ocean-700 hover:bg-ocean-50 disabled:opacity-40"
+                        >
+                          <Pencil className="h-4 w-4" />
+                          Editar
+                        </button>
                         <button
                           type="button"
                           onClick={() => removeHolder(holder.id)}
-                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-red-500 transition-colors hover:bg-red-50"
+                          disabled={!!holderDraft}
+                          className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-50 disabled:opacity-40"
                           aria-label="Remover titular"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Remover
+                          <Trash2 className="h-4 w-4" />
+                          Excluir
                         </button>
-                      )}
+                      </div>
+                    </div>
+                  </div>
+                  )
+                ))}
+
+                {holderDraft && (
+                  <div className="rounded-2xl border-2 border-mint-300 bg-white p-5 shadow-sm">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="font-display text-lg font-bold text-ocean-900">
+                          {holders.some((holder) => holder.id === holderDraft.id)
+                            ? 'Editar titular'
+                            : 'Novo titular'}
+                        </p>
+                        <p className="mt-1 text-sm text-ocean-500">
+                          Preencha os dados e salve para fechar este cartão.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={cancelHolder}
+                        className="rounded-xl p-2 text-ocean-500 hover:bg-ocean-50"
+                        aria-label="Cancelar edição"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
                     </div>
 
-                    {/* Plan selector */}
                     <div className="mt-3 grid grid-cols-2 gap-2">
                       {(
                         [
@@ -553,10 +966,10 @@ export default function FormColetivo() {
                           key={opt.key}
                           type="button"
                           onClick={() =>
-                            updateHolder(holder.id, { plan: opt.key })
+                            updateHolderDraft({ plan: opt.key })
                           }
                           className={`flex min-h-[72px] flex-col items-center justify-center gap-1.5 rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition-all sm:min-h-0 sm:flex-row sm:justify-start sm:gap-2 ${
-                            holder.plan === opt.key
+                            holderDraft.plan === opt.key
                               ? 'border-mint-500 bg-mint-50 text-mint-700'
                               : 'border-ocean-200 bg-white text-ocean-600 hover:border-ocean-300'
                           }`}
@@ -580,9 +993,9 @@ export default function FormColetivo() {
                         </label>
                         <input
                           type="text"
-                          value={holder.name}
+                          value={holderDraft.name}
                           onChange={(e) =>
-                            updateHolder(holder.id, { name: e.target.value })
+                            updateHolderDraft({ name: e.target.value })
                           }
                           className="input-field"
                           placeholder="Nome completo do titular"
@@ -595,9 +1008,9 @@ export default function FormColetivo() {
                           <input
                             type="text"
                             inputMode="numeric"
-                            value={holder.cpf}
+                            value={holderDraft.cpf}
                             onChange={(e) =>
-                              updateHolder(holder.id, {
+                              updateHolderDraft({
                                 cpf: formatCPF(e.target.value),
                               })
                             }
@@ -612,9 +1025,9 @@ export default function FormColetivo() {
                           </label>
                           <input
                             type="date"
-                            value={holder.birthDate}
+                            value={holderDraft.birthDate}
                             onChange={(e) =>
-                              updateHolder(holder.id, {
+                              updateHolderDraft({
                                 birthDate: e.target.value,
                               })
                             }
@@ -628,9 +1041,9 @@ export default function FormColetivo() {
                           </label>
                           <input
                             type="email"
-                            value={holder.email}
+                            value={holderDraft.email}
                             onChange={(e) =>
-                              updateHolder(holder.id, {
+                              updateHolderDraft({
                                 email: e.target.value,
                               })
                             }
@@ -646,9 +1059,9 @@ export default function FormColetivo() {
                           <input
                             type="tel"
                             inputMode="numeric"
-                            value={holder.phone}
+                            value={holderDraft.phone}
                             onChange={(e) =>
-                              updateHolder(holder.id, {
+                              updateHolderDraft({
                                 phone: formatPhone(e.target.value),
                               })
                             }
@@ -658,8 +1071,32 @@ export default function FormColetivo() {
                         </div>
                       </div>
                     </div>
+
+                    {holderFormError && (
+                      <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-600">
+                        {holderFormError}
+                      </p>
+                    )}
+
+                    <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                      <button
+                        type="button"
+                        onClick={cancelHolder}
+                        className="inline-flex items-center justify-center rounded-xl border border-ocean-200 px-5 py-3 text-sm font-bold text-ocean-700 hover:bg-ocean-50"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveHolder}
+                        className="btn-primary"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        Salvar titular
+                      </button>
+                    </div>
                   </div>
-                ))}
+                )}
               </div>
             </section>
 
@@ -669,8 +1106,9 @@ export default function FormColetivo() {
                 3. Termos de adesão
               </h2>
               <p className="mt-3 text-sm leading-relaxed text-ocean-700">
-                Depois de conferir os dados, clique em contratar. O Termo de
-                Adesão será exibido para leitura e aceite antes do envio.
+                Depois de salvar todos os cartões, você pode gerar a lista em
+                PDF. Ao emitir o boleto, o Termo de Adesão será exibido para
+                leitura e aceite antes do envio.
               </p>
             </section>
           </div>
@@ -754,12 +1192,22 @@ export default function FormColetivo() {
 
               <button
                 type="button"
+                onClick={generateGroupPdf}
+                disabled={!isValid || submitting}
+                className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-ocean-200 bg-white px-6 py-3.5 text-sm font-bold text-ocean-700 transition-colors enabled:hover:bg-ocean-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FileText className="h-5 w-5" />
+                Gerar lista em PDF
+              </button>
+
+              <button
+                type="button"
                 onClick={openTerms}
                 disabled={!isValid || submitting}
-                className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-gradient px-6 py-4 text-base font-bold text-white shadow-glow-blue transition-all duration-300 enabled:hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-gradient px-6 py-4 text-base font-bold text-white shadow-glow-blue transition-all duration-300 enabled:hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <ShieldCheck className="h-5 w-5" />
-                Contratar plano coletivo
+                Emitir boleto e concluir
               </button>
 
               {submitError && (
