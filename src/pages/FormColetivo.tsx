@@ -531,7 +531,7 @@ export default function FormColetivo() {
         nasc_titular: formatBirthDateBR(holder.birthDate),
         email_titular: holder.email.trim().toLowerCase(),
         tel_titular: onlyDigits(holder.phone),
-        cod_plano: holder.plan === 'individual' ? '1830' : '1832',
+        cod_plano: holder.plan === 'individual' ? '2878' : '2880',
       })),
     };
 
