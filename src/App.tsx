@@ -29,6 +29,7 @@ import AssociadoDashboard from '@/pages/AssociadoDashboard';
 import Colaborador from '@/pages/Colaborador';
 import ColaboradorDashboard from '@/pages/ColaboradorDashboard';
 import SejaColaborador from '@/pages/SejaColaborador';
+import CriarSenha from '@/pages/CriarSenha';
 
 const CHAVE_INDICADOR =
   'indicador_colab';
@@ -157,6 +158,7 @@ function Layout({
   const paginaExclusiva = [
     '/formcoletivo',
     '/seja-colaborador',
+    '/criar-senha',
   ].includes(
     location.pathname
   );
@@ -258,6 +260,18 @@ export default function App() {
             path="/colaborador/dashboard"
             element={
               <ColaboradorDashboard />
+            }
+          />
+
+          {/*
+           * Criação e recuperação
+           * de senha para administrador,
+           * associado e colaborador.
+           */}
+          <Route
+            path="/criar-senha"
+            element={
+              <CriarSenha />
             }
           />
 
