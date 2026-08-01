@@ -21,7 +21,14 @@ import Footer from '@/components/Footer';
 import Home from '@/pages/Home';
 import FormColetivo from '@/pages/FormColetivo';
 import Admin from '@/pages/Admin';
+
 import Associado from '@/pages/Associado';
+import AssociadoPage from '@/pages/AssociadoPage';
+import AssociadoDashboard from '@/pages/AssociadoDashboard';
+
+import Colaborador from '@/pages/Colaborador';
+import ColaboradorDashboard from '@/pages/ColaboradorDashboard';
+import SejaColaborador from '@/pages/SejaColaborador';
 
 const CHAVE_INDICADOR =
   'indicador_colab';
@@ -38,8 +45,12 @@ function salvarIndicador(
   );
 
   const dias = 30;
+
   const segundos =
-    dias * 24 * 60 * 60;
+    dias *
+    24 *
+    60 *
+    60;
 
   document.cookie =
     `${COOKIE_INDICADOR}=${indicador}; ` +
@@ -59,24 +70,34 @@ function EntradaIndicador() {
 
   useEffect(() => {
     const codigo =
-      String(indicador ?? '')
-        .trim();
+      String(
+        indicador ?? ''
+      ).trim();
 
     /*
      * Aceita somente quatro números:
      * 0001, 0002, 0015, 1380 etc.
      */
-    if (/^\d{4}$/.test(codigo)) {
-      salvarIndicador(codigo);
+    if (
+      /^\d{4}$/.test(
+        codigo
+      )
+    ) {
+      salvarIndicador(
+        codigo
+      );
     }
 
     /*
      * Retira o indicador da URL
      * sem recarregar a página.
      */
-    navigate('/', {
-      replace: true,
-    });
+    navigate(
+      '/',
+      {
+        replace: true,
+      }
+    );
   }, [
     indicador,
     navigate,
@@ -99,9 +120,10 @@ function ScrollToHash() {
         );
 
       if (elemento) {
-        elemento.scrollIntoView({
-          behavior: 'smooth',
-        });
+        elemento
+          .scrollIntoView({
+            behavior: 'smooth',
+          });
       }
 
       return;
@@ -129,15 +151,17 @@ function Layout({
     useLocation();
 
   /*
-   * O formulário coletivo fica
-   * em uma página exclusiva,
-   * sem Header e sem Footer.
+   * Estas páginas são exclusivas:
+   * não exibem Header nem Footer.
    */
-  const paginaFormulario =
-    location.pathname ===
-    '/formcoletivo';
+  const paginaExclusiva = [
+    '/formcoletivo',
+    '/seja-colaborador',
+  ].includes(
+    location.pathname
+  );
 
-  if (paginaFormulario) {
+  if (paginaExclusiva) {
     return (
       <main className="min-h-screen">
         {children}
@@ -165,11 +189,13 @@ export default function App() {
 
       <Layout>
         <Routes>
+          {/* Página inicial */}
           <Route
             path="/"
             element={<Home />}
           />
 
+          {/* Inscrição coletiva */}
           <Route
             path="/formcoletivo"
             element={
@@ -177,20 +203,70 @@ export default function App() {
             }
           />
 
+          {/* Área administrativa */}
           <Route
             path="/admin"
             element={<Admin />}
           />
 
+          {/*
+           * Associado:
+           * inscrição, acesso
+           * e dashboard.
+           */}
           <Route
-            path="/associado"
+            path="/associado/inscricao"
             element={
               <Associado />
             }
           />
 
+          <Route
+            path="/associado"
+            element={
+              <AssociadoPage />
+            }
+          />
+
+          <Route
+            path="/associado/dashboard"
+            element={
+              <AssociadoDashboard />
+            }
+          />
+
           {/*
-           * Entrada por link do colaborador:
+           * Colaborador:
+           * inscrição, acesso
+           * e dashboard.
+           */}
+          <Route
+            path="/seja-colaborador"
+            element={
+              <SejaColaborador />
+            }
+          />
+
+          <Route
+            path="/colaborador"
+            element={
+              <Colaborador />
+            }
+          />
+
+          <Route
+            path="/colaborador/dashboard"
+            element={
+              <ColaboradorDashboard />
+            }
+          />
+
+          {/*
+           * Esta rota precisa ficar
+           * depois de todas as rotas
+           * com nomes.
+           *
+           * Exemplo:
            * empresas.consultoque.com.br/0007
            */}
           <Route
@@ -200,6 +276,7 @@ export default function App() {
             }
           />
 
+          {/* Rota inexistente */}
           <Route
             path="*"
             element={<Home />}

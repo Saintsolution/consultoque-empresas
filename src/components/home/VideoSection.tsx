@@ -6,8 +6,10 @@ import {
 } from 'lucide-react';
 
 export default function VideoSection() {
-  const [somAtivado, setSomAtivado] =
-    useState(false);
+  const [
+    somAtivado,
+    setSomAtivado,
+  ] = useState(false);
 
   const videoUrl = somAtivado
     ? 'https://fast.wistia.net/embed/iframe/6a7aa410u4?seo=false&videoFoam=true&autoPlay=true&muted=false&controlsVisibleOnLoad=false'
@@ -72,7 +74,6 @@ export default function VideoSection() {
               src={videoUrl}
               title="Conheça a CONSULTOQUE"
               allow="autoplay; fullscreen"
-              allowFullScreen
               frameBorder="0"
               scrolling="no"
               className="absolute inset-0 h-full w-full"

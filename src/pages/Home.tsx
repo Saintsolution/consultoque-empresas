@@ -2,6 +2,7 @@ import Hero from '@/components/home/Hero';
 import Benefits from '@/components/home/Benefits';
 import Pricing from '@/components/home/Pricing';
 import VideoSection from '@/components/home/VideoSection';
+import SejaColaboradorCTA from '@/components/home/SejaColaboradorCTA';
 import { LegalCompliance } from '@/components/home/LegalCompliance';
 
 export default function Home() {
@@ -11,6 +12,7 @@ export default function Home() {
       <Benefits />
       <Pricing />
       <VideoSection />
+      <SejaColaboradorCTA />
       <LegalCompliance />
     </>
   );
