@@ -92,8 +92,7 @@ function formatarTelefone(
   valor: string
 ) {
   const numeros =
-    somenteNumeros(valor)
-      .slice(0, 11);
+    somenteNumeros(valor);
 
   if (numeros.length <= 10) {
     return numeros
@@ -314,6 +313,32 @@ export default function SejaColaborador() {
     setErro('');
   }
 
+  function atualizarTelefone(
+    valor: string
+  ) {
+    const numeros =
+      somenteNumeros(valor);
+
+    /*
+     * O campo recebe somente o número
+     * nacional: DDD + telefone.
+     * Não cortamos silenciosamente +55,
+     * pois isso alteraria o número real.
+     */
+    if (numeros.length > 11) {
+      setErro(
+        'Digite somente DDD + número, sem o código do Brasil (+55).'
+      );
+
+      return;
+    }
+
+    atualizarCampo(
+      'tel_colab',
+      formatarTelefone(numeros)
+    );
+  }
+
   function validarFormulario() {
     const nome =
       formulario.nome_colab
@@ -360,7 +385,7 @@ export default function SejaColaborador() {
       telefone.length < 10 ||
       telefone.length > 11
     ) {
-      return 'Informe um telefone válido com DDD.';
+      return 'Digite somente DDD + número, sem o código do Brasil (+55).';
     }
 
     if (!pix) {
@@ -850,7 +875,8 @@ export default function SejaColaborador() {
                     type="tel"
                     required
                     inputMode="tel"
-                    autoComplete="tel"
+                    autoComplete="tel-national"
+                    maxLength={15}
                     value={
                       formulario
                         .tel_colab
@@ -858,17 +884,17 @@ export default function SejaColaborador() {
                     onChange={(
                       evento
                     ) =>
-                      atualizarCampo(
-                        'tel_colab',
-                        formatarTelefone(
-                          evento.target
-                            .value
-                        )
+                      atualizarTelefone(
+                        evento.target.value
                       )
                     }
                     placeholder="(21) 99999-9999"
                     className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-mint-500 focus:ring-4 focus:ring-mint-500/10"
                   />
+
+                  <small className="mt-1.5 block text-xs font-medium text-slate-500">
+                    Digite apenas DDD + número. Não informe +55.
+                  </small>
                 </label>
 
                 <label className="sm:col-span-2">
