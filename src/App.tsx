@@ -75,10 +75,6 @@ function EntradaIndicador() {
         indicador ?? ''
       ).trim();
 
-    /*
-     * Aceita somente quatro números:
-     * 0001, 0002, 0015, 1380 etc.
-     */
     if (
       /^\d{4}$/.test(
         codigo
@@ -89,10 +85,6 @@ function EntradaIndicador() {
       );
     }
 
-    /*
-     * Retira o indicador da URL
-     * sem recarregar a página.
-     */
     navigate(
       '/',
       {
@@ -159,6 +151,8 @@ function Layout({
     '/formcoletivo',
     '/seja-colaborador',
     '/criar-senha',
+    '/colaborador',
+    '/colaborador/dashboard',
   ].includes(
     location.pathname
   );
@@ -211,11 +205,7 @@ export default function App() {
             element={<Admin />}
           />
 
-          {/*
-           * Associado:
-           * inscrição, acesso
-           * e dashboard.
-           */}
+          {/* Área do associado */}
           <Route
             path="/associado/inscricao"
             element={
@@ -237,11 +227,7 @@ export default function App() {
             }
           />
 
-          {/*
-           * Colaborador:
-           * inscrição, acesso
-           * e dashboard.
-           */}
+          {/* Área do colaborador */}
           <Route
             path="/seja-colaborador"
             element={
@@ -263,11 +249,7 @@ export default function App() {
             }
           />
 
-          {/*
-           * Criação e recuperação
-           * de senha para administrador,
-           * associado e colaborador.
-           */}
+          {/* Criação e recuperação de senha */}
           <Route
             path="/criar-senha"
             element={
@@ -275,14 +257,7 @@ export default function App() {
             }
           />
 
-          {/*
-           * Esta rota precisa ficar
-           * depois de todas as rotas
-           * com nomes.
-           *
-           * Exemplo:
-           * empresas.consultoque.com.br/0007
-           */}
+          {/* Entrada pelo código do colaborador */}
           <Route
             path="/:indicador"
             element={

@@ -7,6 +7,7 @@ import type {
 } from 'react';
 
 import {
+  ArrowLeft,
   ArrowRight,
   Eye,
   EyeOff,
@@ -68,6 +69,7 @@ type DadosColaborador = {
 type RespostaLogin = {
   sucesso?: boolean;
   autenticado?: boolean;
+  codigo?: string;
   mensagem?: string;
   token?: string;
   colaborador?: DadosColaborador;
@@ -103,6 +105,11 @@ export default function Colaborador() {
     setErro,
   ] = useState('');
 
+  const [
+    codigoErro,
+    setCodigoErro,
+  ] = useState('');
+
   async function entrar(
     evento: FormEvent<HTMLFormElement>
   ) {
@@ -110,6 +117,7 @@ export default function Colaborador() {
 
     setErro('');
     setMensagem('');
+    setCodigoErro('');
 
     const cpfLimpo =
       somenteNumeros(cpf);
@@ -191,20 +199,27 @@ export default function Colaborador() {
       }
 
       /*
-       * Resposta negativa do n8n,
-       * como o status HTTP 401.
+       * Guarda o código específico
+       * retornado pelo n8n.
        */
-      if (!requisicao.ok) {
-        throw new Error(
-          resposta.mensagem ||
-          'CPF ou senha inválidos.'
+      if (resposta.codigo) {
+        setCodigoErro(
+          resposta.codigo
         );
       }
 
       /*
-       * Para autorizar, os dois valores
-       * precisam vir como true.
+       * Resposta negativa do n8n:
+       * CPF inexistente, senha errada
+       * ou colaborador inativo.
        */
+      if (!requisicao.ok) {
+        throw new Error(
+          resposta.mensagem ||
+          'Não foi possível realizar o acesso.'
+        );
+      }
+
       const autenticado =
         resposta.sucesso === true &&
         resposta.autenticado === true;
@@ -239,8 +254,8 @@ export default function Colaborador() {
       );
 
       /*
-       * Esta é a chave principal que
-       * o ColaboradorDashboard utilizará.
+       * Chave principal utilizada
+       * pelo dashboard.
        */
       sessionStorage.setItem(
         'colaborador',
@@ -250,9 +265,8 @@ export default function Colaborador() {
       );
 
       /*
-       * Mantemos temporariamente esta
-       * segunda chave por compatibilidade.
-       * Depois poderá ser removida.
+       * Chave mantida temporariamente
+       * por compatibilidade.
        */
       sessionStorage.setItem(
         'colaborador_dados',
@@ -303,159 +317,190 @@ export default function Colaborador() {
   }
 
   return (
-    <section className="min-h-screen bg-slate-50 py-16 md:py-24">
+    <section className="min-h-screen bg-slate-50 py-8 md:py-12">
       <div className="container-app">
-        <div className="mx-auto max-w-md rounded-3xl border border-slate-200 bg-white p-7 shadow-xl md:p-9">
-          <div className="text-center">
-            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-green-100 text-green-600">
-              <UserRound className="h-7 w-7" />
-            </span>
-
-            <h1 className="mt-5 font-display text-3xl font-black text-slate-900">
-              Área do colaborador
-            </h1>
-
-            <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              Entre para acompanhar suas
-              indicações, comissões e seu
-              link exclusivo.
-            </p>
-          </div>
-
-          <form
-            onSubmit={entrar}
-            className="mt-8 space-y-5"
+        <div className="mx-auto max-w-md">
+          {/* Retorno ao site */}
+          <Link
+            to="/"
+            className="mb-5 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-green-400 hover:text-green-700"
           >
-            <div>
-              <label
-                htmlFor="cpf-colaborador"
-                className="mb-2 block text-sm font-bold text-slate-700"
-              >
-                CPF
-              </label>
+            <ArrowLeft className="h-4 w-4" />
+            Voltar ao site
+          </Link>
 
-              <input
-                id="cpf-colaborador"
-                type="text"
-                inputMode="numeric"
-                autoComplete="username"
-                maxLength={14}
-                value={cpf}
-                onChange={(evento) =>
-                  setCpf(
-                    formatarCPF(
-                      evento.target.value
-                    )
-                  )
-                }
-                placeholder="000.000.000-00"
-                className="h-14 w-full rounded-xl border border-slate-300 px-4 text-slate-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
-              />
+          {/* Cartão de login */}
+          <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-xl md:p-9">
+            <div className="text-center">
+              <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-green-100 text-green-600">
+                <UserRound className="h-7 w-7" />
+              </span>
+
+              <h1 className="mt-5 font-display text-3xl font-black text-slate-900">
+                Área do colaborador
+              </h1>
+
+              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                Entre para acompanhar suas
+                indicações, comissões e seu
+                link exclusivo.
+              </p>
             </div>
 
-            <div>
-              <label
-                htmlFor="senha-colaborador"
-                className="mb-2 block text-sm font-bold text-slate-700"
-              >
-                Senha
-              </label>
-
-              <div className="relative">
-                <LockKeyhole className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+            <form
+              onSubmit={entrar}
+              className="mt-8 space-y-5"
+            >
+              <div>
+                <label
+                  htmlFor="cpf-colaborador"
+                  className="mb-2 block text-sm font-bold text-slate-700"
+                >
+                  CPF
+                </label>
 
                 <input
-                  id="senha-colaborador"
-                  type={
-                    mostrarSenha
-                      ? 'text'
-                      : 'password'
-                  }
-                  autoComplete="current-password"
-                  value={senha}
-                  onChange={(evento) =>
-                    setSenha(
-                      evento.target.value
-                    )
-                  }
-                  placeholder="Digite sua senha"
-                  className="h-14 w-full rounded-xl border border-slate-300 pl-12 pr-12 text-slate-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
+                  id="cpf-colaborador"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="username"
+                  maxLength={14}
+                  value={cpf}
+                  onChange={(evento) => {
+                    setCpf(
+                      formatarCPF(
+                        evento.target.value
+                      )
+                    );
+
+                    setErro('');
+                    setCodigoErro('');
+                  }}
+                  placeholder="000.000.000-00"
+                  className="h-14 w-full rounded-xl border border-slate-300 px-4 text-slate-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
                 />
+              </div>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setMostrarSenha(
-                      (valor) => !valor
-                    )
-                  }
-                  aria-label={
-                    mostrarSenha
-                      ? 'Ocultar senha'
-                      : 'Mostrar senha'
-                  }
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+              <div>
+                <label
+                  htmlFor="senha-colaborador"
+                  className="mb-2 block text-sm font-bold text-slate-700"
                 >
-                  {mostrarSenha ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
+                  Senha
+                </label>
+
+                <div className="relative">
+                  <LockKeyhole className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+
+                  <input
+                    id="senha-colaborador"
+                    type={
+                      mostrarSenha
+                        ? 'text'
+                        : 'password'
+                    }
+                    autoComplete="current-password"
+                    value={senha}
+                    onChange={(evento) => {
+                      setSenha(
+                        evento.target.value
+                      );
+
+                      setErro('');
+                      setCodigoErro('');
+                    }}
+                    placeholder="Digite sua senha"
+                    className="h-14 w-full rounded-xl border border-slate-300 pl-12 pr-12 text-slate-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMostrarSenha(
+                        (valor) => !valor
+                      )
+                    }
+                    aria-label={
+                      mostrarSenha
+                        ? 'Ocultar senha'
+                        : 'Mostrar senha'
+                    }
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                  >
+                    {mostrarSenha ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {erro && (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
+                >
+                  <p>
+                    {erro}
+                  </p>
+
+                  {codigoErro ===
+                    'COLABORADOR_NAO_ENCONTRADO' && (
+                    <Link
+                      to="/seja-colaborador"
+                      className="mt-3 inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-green-700"
+                    >
+                      Preencher meus dados
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
                   )}
-                </button>
-              </div>
-            </div>
-
-            {erro && (
-              <div
-                role="alert"
-                className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
-              >
-                {erro}
-              </div>
-            )}
-
-            {mensagem && (
-              <div
-                role="status"
-                className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700"
-              >
-                {mensagem}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={enviando}
-              className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-5 font-bold text-white shadow-lg transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {enviando ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  Entrando...
-                </>
-              ) : (
-                <>
-                  Entrar
-                  <ArrowRight className="h-5 w-5" />
-                </>
+                </div>
               )}
-            </button>
-          </form>
 
-          <div className="mt-6 flex flex-col items-center gap-3 text-center text-sm">
-            <Link
-              to="/criar-senha?tipo=COLABORADOR"
-              className="font-semibold text-green-700 hover:text-green-800"
-            >
-              Esqueci ou quero alterar minha senha
-            </Link>
+              {mensagem && (
+                <div
+                  role="status"
+                  className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700"
+                >
+                  {mensagem}
+                </div>
+              )}
 
-            <Link
-              to="/seja-colaborador"
-              className="text-slate-600 hover:text-slate-900"
-            >
-              Ainda não sou colaborador
-            </Link>
+              <button
+                type="submit"
+                disabled={enviando}
+                className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-5 font-bold text-white shadow-lg transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {enviando ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Entrando...
+                  </>
+                ) : (
+                  <>
+                    Entrar
+                    <ArrowRight className="h-5 w-5" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="mt-6 flex flex-col items-center gap-3 text-center text-sm">
+              <Link
+                to="/criar-senha?tipo=COLABORADOR"
+                className="font-semibold text-green-700 hover:text-green-800"
+              >
+                Esqueci ou quero alterar minha senha
+              </Link>
+
+              <Link
+                to="/seja-colaborador"
+                className="text-slate-600 hover:text-slate-900"
+              >
+                Ainda não sou colaborador
+              </Link>
+            </div>
           </div>
         </div>
       </div>
