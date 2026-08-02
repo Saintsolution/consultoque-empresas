@@ -1,6 +1,9 @@
 import {
-  FormEvent,
   useState,
+} from 'react';
+
+import type {
+  FormEvent,
 } from 'react';
 
 import {
@@ -50,17 +53,24 @@ function formatarCPF(
     );
 }
 
+type DadosColaborador = {
+  cod_colab?: string;
+  cod_pai?: string;
+  nome_colab?: string;
+  cpf_colab?: string;
+  email_colab?: string;
+  tel_colab?: string;
+  pix_colab?: string;
+  status_colab?: string;
+  link_indicacao?: string;
+};
+
 type RespostaLogin = {
   sucesso?: boolean;
   autenticado?: boolean;
   mensagem?: string;
   token?: string;
-  colaborador?: {
-    cod_colab?: string;
-    nome_colab?: string;
-    email_colab?: string;
-    status_colab?: string;
-  };
+  colaborador?: DadosColaborador;
 };
 
 export default function Colaborador() {
@@ -112,7 +122,7 @@ export default function Colaborador() {
       return;
     }
 
-    if (!senha) {
+    if (!senha.trim()) {
       setErro(
         'Informe sua senha.'
       );
@@ -123,7 +133,7 @@ export default function Colaborador() {
     try {
       setEnviando(true);
 
-      const resposta =
+      const requisicao =
         await fetch(
           WEBHOOK_LOGIN,
           {
@@ -156,52 +166,111 @@ export default function Colaborador() {
           }
         );
 
-      const dados =
-        await resposta.json()
-          .catch(() => ({})) as
-          RespostaLogin;
+      /*
+       * Primeiro lemos como texto.
+       * Isso evita erro caso o n8n
+       * responda sem JSON.
+       */
+      const textoResposta =
+        await requisicao.text();
 
-      if (!resposta.ok) {
-        throw new Error(
-          dados.mensagem ||
-          'Não foi possível realizar o acesso.'
-        );
+      let resposta:
+        RespostaLogin = {};
+
+      if (textoResposta) {
+        try {
+          resposta =
+            JSON.parse(
+              textoResposta
+            ) as RespostaLogin;
+        } catch {
+          throw new Error(
+            'O servidor retornou uma resposta inválida.'
+          );
+        }
       }
 
-      const autenticado =
-        dados.sucesso === true ||
-        dados.autenticado === true;
-
-      if (!autenticado) {
+      /*
+       * Resposta negativa do n8n,
+       * como o status HTTP 401.
+       */
+      if (!requisicao.ok) {
         throw new Error(
-          dados.mensagem ||
-          'CPF ou senha incorretos.'
+          resposta.mensagem ||
+          'CPF ou senha inválidos.'
         );
       }
 
       /*
-       * O hash da senha nunca deve
-       * ser devolvido pelo webhook.
+       * Para autorizar, os dois valores
+       * precisam vir como true.
        */
-      if (dados.token) {
-        sessionStorage.setItem(
-          'colaborador_token',
-          dados.token
+      const autenticado =
+        resposta.sucesso === true &&
+        resposta.autenticado === true;
+
+      if (!autenticado) {
+        throw new Error(
+          resposta.mensagem ||
+          'CPF ou senha inválidos.'
         );
       }
 
-      if (dados.colaborador) {
+      if (!resposta.colaborador) {
+        throw new Error(
+          'Os dados do colaborador não foram retornados.'
+        );
+      }
+
+      /*
+       * Limpa qualquer sessão anterior
+       * antes de criar a nova.
+       */
+      sessionStorage.removeItem(
+        'colaborador'
+      );
+
+      sessionStorage.removeItem(
+        'colaborador_dados'
+      );
+
+      sessionStorage.removeItem(
+        'colaborador_token'
+      );
+
+      /*
+       * Esta é a chave principal que
+       * o ColaboradorDashboard utilizará.
+       */
+      sessionStorage.setItem(
+        'colaborador',
+        JSON.stringify(
+          resposta.colaborador
+        )
+      );
+
+      /*
+       * Mantemos temporariamente esta
+       * segunda chave por compatibilidade.
+       * Depois poderá ser removida.
+       */
+      sessionStorage.setItem(
+        'colaborador_dados',
+        JSON.stringify(
+          resposta.colaborador
+        )
+      );
+
+      if (resposta.token) {
         sessionStorage.setItem(
-          'colaborador_dados',
-          JSON.stringify(
-            dados.colaborador
-          )
+          'colaborador_token',
+          resposta.token
         );
       }
 
       setMensagem(
-        dados.mensagem ||
-        'Acesso autorizado.'
+        resposta.mensagem ||
+        'Login realizado com sucesso.'
       );
 
       navigate(
@@ -211,10 +280,22 @@ export default function Colaborador() {
         }
       );
     } catch (erroRecebido) {
+      sessionStorage.removeItem(
+        'colaborador'
+      );
+
+      sessionStorage.removeItem(
+        'colaborador_dados'
+      );
+
+      sessionStorage.removeItem(
+        'colaborador_token'
+      );
+
       setErro(
         erroRecebido instanceof Error
           ? erroRecebido.message
-          : 'Não foi possível entrar.'
+          : 'Não foi possível realizar o acesso.'
       );
     } finally {
       setEnviando(false);
@@ -222,7 +303,7 @@ export default function Colaborador() {
   }
 
   return (
-    <section className="bg-slate-50 py-16 md:py-24">
+    <section className="min-h-screen bg-slate-50 py-16 md:py-24">
       <div className="container-app">
         <div className="mx-auto max-w-md rounded-3xl border border-slate-200 bg-white p-7 shadow-xl md:p-9">
           <div className="text-center">
@@ -258,6 +339,7 @@ export default function Colaborador() {
                 type="text"
                 inputMode="numeric"
                 autoComplete="username"
+                maxLength={14}
                 value={cpf}
                 onChange={(evento) =>
                   setCpf(
@@ -324,13 +406,19 @@ export default function Colaborador() {
             </div>
 
             {erro && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+              <div
+                role="alert"
+                className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
+              >
                 {erro}
               </div>
             )}
 
             {mensagem && (
-              <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
+              <div
+                role="status"
+                className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700"
+              >
                 {mensagem}
               </div>
             )}
