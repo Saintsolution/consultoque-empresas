@@ -31,6 +31,11 @@ import ColaboradorDashboard from '@/pages/ColaboradorDashboard';
 import SejaColaborador from '@/pages/SejaColaborador';
 import CriarSenha from '@/pages/CriarSenha';
 
+import MaterialPromocional from '@/pages/MaterialPromocional';
+import PanfletosPromocionais from '@/pages/PanfletosPromocionais';
+import MontarFolder from '@/pages/MontarFolder';
+import Play from '@/pages/Play';
+
 const CHAVE_INDICADOR =
   'indicador_colab';
 
@@ -117,9 +122,9 @@ function ScrollToHash() {
           .scrollIntoView({
             behavior: 'smooth',
           });
-      }
 
-      return;
+        return;
+      }
     }
 
     window.scrollTo({
@@ -143,19 +148,34 @@ function Layout({
   const location =
     useLocation();
 
+  const caminho =
+    location.pathname;
+
   /*
-   * Estas páginas são exclusivas:
-   * não exibem Header nem Footer.
+   * Estas páginas possuem
+   * tela e navegação próprias.
+   *
+   * Portanto, não exibem
+   * Header nem Footer gerais.
    */
-  const paginaExclusiva = [
+  const paginasExclusivas = [
     '/formcoletivo',
     '/seja-colaborador',
     '/criar-senha',
     '/colaborador',
     '/colaborador/dashboard',
-  ].includes(
-    location.pathname
-  );
+    '/material-promocional',
+    '/panfletos-promocionais',
+    '/montar-folder',
+  ];
+
+  const paginaExclusiva =
+    paginasExclusivas.includes(
+      caminho
+    ) ||
+    caminho.startsWith(
+      '/play/'
+    );
 
   if (paginaExclusiva) {
     return (
@@ -227,7 +247,7 @@ export default function App() {
             }
           />
 
-          {/* Área do colaborador */}
+          {/* Cadastro do colaborador */}
           <Route
             path="/seja-colaborador"
             element={
@@ -235,6 +255,7 @@ export default function App() {
             }
           />
 
+          {/* Login do colaborador */}
           <Route
             path="/colaborador"
             element={
@@ -242,10 +263,63 @@ export default function App() {
             }
           />
 
+          {/* Dashboard do colaborador */}
           <Route
             path="/colaborador/dashboard"
             element={
               <ColaboradorDashboard />
+            }
+          />
+
+          {/* Material promocional */}
+          <Route
+            path="/material-promocional"
+            element={
+              <MaterialPromocional />
+            }
+          />
+
+          {/* Catálogo de panfletos */}
+          <Route
+            path="/panfletos-promocionais"
+            element={
+              <PanfletosPromocionais />
+            }
+          />
+
+          {/* Montagem do panfleto */}
+          <Route
+            path="/montar-folder"
+            element={
+              <MontarFolder />
+            }
+          />
+
+          {/*
+           * Vídeo com número
+           * do colaborador.
+           *
+           * Exemplo:
+           * /play/crianca-noite/0003
+           */}
+          <Route
+            path="/play/:video/:ref"
+            element={
+              <Play />
+            }
+          />
+
+          {/*
+           * Vídeo com referência
+           * já guardada no navegador.
+           *
+           * Exemplo:
+           * /play/crianca-noite
+           */}
+          <Route
+            path="/play/:video"
+            element={
+              <Play />
             }
           />
 
@@ -257,7 +331,13 @@ export default function App() {
             }
           />
 
-          {/* Entrada pelo código do colaborador */}
+          {/*
+           * Entrada pelo código
+           * do colaborador.
+           *
+           * Exemplo:
+           * /0003
+           */}
           <Route
             path="/:indicador"
             element={
