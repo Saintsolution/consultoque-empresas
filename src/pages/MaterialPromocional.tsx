@@ -67,6 +67,7 @@ const VIDEOS_PROMOCIONAIS = [
       'https://drive.google.com/uc?export=download&id=1EID5HcVRURnGoR5BNVDABOkP6R1JUBoo',
   },
 
+  
   {
     slug:
       'japones-doente',
@@ -84,6 +85,22 @@ const VIDEOS_PROMOCIONAIS = [
       'https://drive.google.com/uc?export=download&id=1w6OJJxxe94DRBnVo5APOYX4oiQV2fpY2',
   },
 
+  {
+  slug:
+    'crianca-noite-sem-preco',
+
+  titulo:
+    'Criança durante a noite — sem preço',
+
+  descricao:
+    'Versão promocional sem exibição de preço, preparada para compartilhamento.',
+
+  formato:
+    'Vertical',
+
+  downloadUrl:
+    'https://drive.google.com/uc?export=download&id=1s9-Tcb1fjhMC0kkq7K3vGTJBvFKT-fGN',
+},
   {
     slug:
       'medico-explica',
