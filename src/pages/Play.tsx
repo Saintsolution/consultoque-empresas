@@ -654,21 +654,21 @@ export function Play() {
           />
         </div>
 
-        {mostrarBotao && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-4 z-50 flex justify-center px-4">
+               {mostrarBotao && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-16 z-50 flex justify-center px-4">
             <button
               type="button"
               onClick={irParaOSite}
-              className="pointer-events-auto flex animate-pulse items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-xl transition hover:bg-blue-700 md:text-base"
+              className="pointer-events-auto flex animate-pulse items-center gap-3 rounded-full bg-blue-600 px-7 py-3.5 text-lg font-bold text-white shadow-2xl transition hover:scale-105 hover:bg-blue-700"
             >
               <PlayIcon
-                size={18}
+                size={24}
                 fill="white"
               />
 
               Saiba mais
 
-              <ArrowRight className="h-5 w-5" />
+              <ArrowRight className="h-6 w-6" />
             </button>
           </div>
         )}
