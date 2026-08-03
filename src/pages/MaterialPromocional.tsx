@@ -25,8 +25,8 @@ import {
 } from 'qrcode.react';
 
 const DOMINIO_EMPRESAS =
-  'https://empresas.consultoque.com.br';
-
+  window.location.origin;
+  
 const LINK_TEXTOS =
   'https://drive.google.com/drive/folders/1pjk7eKKBeAavOw_7-0i8BW-ad0ymoKTj?usp=drive_link';
 

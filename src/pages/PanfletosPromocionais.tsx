@@ -10,8 +10,8 @@ import {
 } from 'lucide-react';
 
 const DOMINIO_EMPRESAS =
-  'https://empresas.consultoque.com.br';
-
+  window.location.origin;
+  
 const arquivos =
   import.meta.glob(
     '../assets/panfletos/folder_*.{png,jpg,jpeg,webp}',

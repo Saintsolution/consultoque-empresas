@@ -22,8 +22,8 @@ import {
 } from 'qrcode.react';
 
 const DOMINIO_EMPRESAS =
-  'https://empresas.consultoque.com.br';
-
+  window.location.origin;
+  
 /*
  * Tamanho original da arte.
  *
