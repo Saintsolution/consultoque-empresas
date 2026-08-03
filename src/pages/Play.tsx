@@ -101,6 +101,19 @@ const videosPromocionais:
       aspectRatio:
         '9/16',
     },
+     'crianca-noite-sem-preco': {
+      titulo:
+        'Criança Noite sem Preço',
+
+      wistiaId:
+        'rxuqw4g4k8',
+
+      formato:
+        'vertical',
+
+      aspectRatio:
+        '9/16',
+    },
 
     'japones-doente': {
       titulo:
