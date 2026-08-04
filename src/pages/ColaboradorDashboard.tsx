@@ -1,4 +1,5 @@
 import {
+  type FormEvent,
   useEffect,
   useState,
 } from 'react';
@@ -16,13 +17,17 @@ import {
   CheckCircle2,
   Copy,
   DollarSign,
+  KeyRound,
   LogOut,
   Megaphone,
+  Pencil,
   QrCode,
   RefreshCw,
+  Save,
   ShoppingCart,
   Users,
   WalletCards,
+  X,
 } from 'lucide-react';
 
 const WEBHOOK_DASHBOARD =
@@ -31,11 +36,28 @@ const WEBHOOK_DASHBOARD =
     ?.trim() ||
   'https://n8n.saintsolution.com.br/webhook/colaborador-dashboard';
 
+const WEBHOOK_ATUALIZAR_DADOS =
+  import.meta.env
+    .VITE_WEBHOOK_COLABORADOR_ATUALIZAR_DADOS
+    ?.trim() ||
+  'https://n8n.saintsolution.com.br/webhook/colaborador-atualiza-dados';
+
 type ColaboradorLogado = {
   cod_colab: string;
   nome_colab: string;
   email_colab: string;
   link_indicacao: string;
+  tel_colab?: string;
+  pix_colab?: string;
+};
+
+type FormularioDados = {
+  email_colab: string;
+  tel_colab: string;
+  pix_colab: string;
+  senha_atual: string;
+  nova_senha: string;
+  confirmar_senha: string;
 };
 
 type DashboardCards = {
@@ -98,6 +120,8 @@ type DashboardResposta = {
     cod_pai: string;
     nome_colab: string;
     email_colab: string;
+    tel_colab: string;
+    pix_colab: string;
     status_colab: string;
   };
 
@@ -283,6 +307,38 @@ export default function ColaboradorDashboard() {
     setTentativa,
   ] = useState(0);
 
+  const [
+    editandoDados,
+    setEditandoDados,
+  ] = useState(false);
+
+  const [
+    salvandoDados,
+    setSalvandoDados,
+  ] = useState(false);
+
+  const [
+    erroDados,
+    setErroDados,
+  ] = useState('');
+
+  const [
+    sucessoDados,
+    setSucessoDados,
+  ] = useState('');
+
+  const [
+    formulario,
+    setFormulario,
+  ] = useState<FormularioDados>({
+    email_colab: '',
+    tel_colab: '',
+    pix_colab: '',
+    senha_atual: '',
+    nova_senha: '',
+    confirmar_senha: '',
+  });
+
   /*
    * Recupera a sessão do login.
    */
@@ -462,6 +518,33 @@ export default function ColaboradorDashboard() {
           setDashboard(
             resultado
           );
+
+          setFormulario({
+            email_colab:
+              resultado.colaborador
+                .email_colab ||
+              colaboradorAtual
+                .email_colab ||
+              '',
+
+            tel_colab:
+              resultado.colaborador
+                .tel_colab ||
+              colaboradorAtual
+                .tel_colab ||
+              '',
+
+            pix_colab:
+              resultado.colaborador
+                .pix_colab ||
+              colaboradorAtual
+                .pix_colab ||
+              '',
+
+            senha_atual: '',
+            nova_senha: '',
+            confirmar_senha: '',
+          });
         }
       } catch (
         problema
@@ -540,6 +623,340 @@ export default function ColaboradorDashboard() {
         colaborador
           .link_indicacao
       );
+    }
+  }
+
+  function abrirEdicao() {
+    const colaboradorAtual =
+      colaborador;
+
+    if (!colaboradorAtual) {
+      return;
+    }
+
+    setErroDados('');
+    setSucessoDados('');
+
+    setFormulario({
+      email_colab:
+        dashboard?.colaborador
+          .email_colab ||
+        colaboradorAtual.email_colab ||
+        '',
+
+      tel_colab:
+        dashboard?.colaborador
+          .tel_colab ||
+        colaboradorAtual.tel_colab ||
+        '',
+
+      pix_colab:
+        dashboard?.colaborador
+          .pix_colab ||
+        colaboradorAtual.pix_colab ||
+        '',
+
+      senha_atual: '',
+      nova_senha: '',
+      confirmar_senha: '',
+    });
+
+    setEditandoDados(true);
+  }
+
+  function cancelarEdicao() {
+    setEditandoDados(false);
+    setErroDados('');
+  }
+
+  async function salvarDados(
+    evento:
+      FormEvent<HTMLFormElement>
+  ) {
+    evento.preventDefault();
+
+    const colaboradorAtual =
+      colaborador;
+
+    if (!colaboradorAtual) {
+      setErroDados(
+        'Não foi possível identificar o colaborador.'
+      );
+
+      return;
+    }
+
+    const token =
+      sessionStorage.getItem(
+        'colaborador_token'
+      );
+
+    if (!token) {
+      limparSessao();
+
+      navigate(
+        '/colaborador',
+        {
+          replace: true,
+        }
+      );
+
+      return;
+    }
+
+    const email =
+      formulario.email_colab
+        .trim()
+        .toLowerCase();
+
+    const telefone =
+      formulario.tel_colab
+        .replace(/\D/g, '');
+
+    const pix =
+      formulario.pix_colab
+        .trim();
+
+    const senhaAtual =
+      formulario.senha_atual;
+
+    const novaSenha =
+      formulario.nova_senha;
+
+    if (
+      !/^\S+@\S+\.\S+$/.test(
+        email
+      )
+    ) {
+      setErroDados(
+        'Informe um e-mail válido.'
+      );
+
+      return;
+    }
+
+    if (
+      telefone.length < 10 ||
+      telefone.length > 11
+    ) {
+      setErroDados(
+        'Informe um telefone com DDD.'
+      );
+
+      return;
+    }
+
+    if (!pix) {
+      setErroDados(
+        'Informe sua chave PIX.'
+      );
+
+      return;
+    }
+
+    if (novaSenha) {
+      if (!senhaAtual) {
+        setErroDados(
+          'Informe a senha atual para criar uma nova senha.'
+        );
+
+        return;
+      }
+
+      if (novaSenha.length < 8) {
+        setErroDados(
+          'A nova senha deve ter pelo menos 8 caracteres.'
+        );
+
+        return;
+      }
+
+      if (
+        novaSenha !==
+        formulario.confirmar_senha
+      ) {
+        setErroDados(
+          'A confirmação da nova senha não confere.'
+        );
+
+        return;
+      }
+    }
+
+    setSalvandoDados(true);
+    setErroDados('');
+    setSucessoDados('');
+
+    try {
+      const resposta =
+        await fetch(
+          WEBHOOK_ATUALIZAR_DADOS,
+          {
+            method: 'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json',
+
+              'X-Colaborador-Token':
+                token,
+            },
+
+            body:
+              JSON.stringify({
+                cod_colab:
+                  colaboradorAtual.cod_colab,
+
+                email_colab:
+                  email,
+
+                tel_colab:
+                  telefone,
+
+                pix_colab:
+                  pix,
+
+                senha_atual:
+                  senhaAtual,
+
+                nova_senha:
+                  novaSenha,
+              }),
+          }
+        );
+
+      const texto =
+        await resposta.text();
+
+      let dados:
+        | {
+            status?: string;
+            mensagem?: string;
+            colaborador?: {
+              cod_colab?: string;
+              email_colab?: string;
+              tel_colab?: string;
+              pix_colab?: string;
+            };
+          }
+        | Array<{
+            status?: string;
+            mensagem?: string;
+            colaborador?: {
+              cod_colab?: string;
+              email_colab?: string;
+              tel_colab?: string;
+              pix_colab?: string;
+            };
+          }>;
+
+      try {
+        dados =
+          JSON.parse(texto);
+      } catch {
+        throw new Error(
+          'O servidor não retornou uma resposta válida.'
+        );
+      }
+
+      const resultado =
+        Array.isArray(dados)
+          ? dados[0]
+          : dados;
+
+      if (
+        resposta.status === 401 ||
+        resposta.status === 403
+      ) {
+        limparSessao();
+
+        navigate(
+          '/colaborador',
+          {
+            replace: true,
+          }
+        );
+
+        return;
+      }
+
+      if (
+        !resposta.ok ||
+        resultado?.status !==
+          'sucesso'
+      ) {
+        throw new Error(
+          resultado?.mensagem ||
+          'Não foi possível atualizar os dados.'
+        );
+      }
+
+      const colaboradorAtualizado:
+        ColaboradorLogado = {
+          ...colaboradorAtual,
+          email_colab: email,
+          tel_colab: telefone,
+          pix_colab: pix,
+        };
+
+      setColaborador(
+        colaboradorAtualizado
+      );
+
+      sessionStorage.setItem(
+        'colaborador',
+        JSON.stringify(
+          colaboradorAtualizado
+        )
+      );
+
+      sessionStorage.setItem(
+        'colaborador_dados',
+        JSON.stringify(
+          colaboradorAtualizado
+        )
+      );
+
+      setDashboard(
+        (atual) =>
+          atual
+            ? {
+                ...atual,
+                colaborador: {
+                  ...atual.colaborador,
+                  email_colab: email,
+                  tel_colab: telefone,
+                  pix_colab: pix,
+                },
+              }
+            : atual
+      );
+
+      setFormulario(
+        (atual) => ({
+          ...atual,
+          email_colab: email,
+          tel_colab: telefone,
+          pix_colab: pix,
+          senha_atual: '',
+          nova_senha: '',
+          confirmar_senha: '',
+        })
+      );
+
+      setEditandoDados(false);
+      setSucessoDados(
+        resultado.mensagem ||
+        'Dados atualizados com sucesso.'
+      );
+    } catch (problema) {
+      setErroDados(
+        problema instanceof Error
+          ? problema.message
+          : 'Não foi possível atualizar os dados.'
+      );
+    } finally {
+      setSalvandoDados(false);
     }
   }
 
@@ -860,20 +1277,273 @@ export default function ColaboradorDashboard() {
           </article>
 
           <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-sm font-bold uppercase tracking-wider text-slate-400">
-              Cadastro
-            </p>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold uppercase tracking-wider text-slate-400">
+                  Meus dados
+                </p>
 
-            <p className="mt-3 break-all font-semibold text-slate-900">
-              {colaborador.email_colab}
-            </p>
+                <p className="mt-3 break-all font-semibold text-slate-900">
+                  {colaborador.email_colab}
+                </p>
 
-            <p className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-green-600">
-              <CheckCircle2 className="h-4 w-4" />
-              Colaborador ativo
-            </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Telefone:{' '}
+                  {dashboard?.colaborador
+                    .tel_colab ||
+                    colaborador.tel_colab ||
+                    '—'}
+                </p>
+
+                <p className="mt-1 break-all text-sm text-slate-500">
+                  PIX:{' '}
+                  {dashboard?.colaborador
+                    .pix_colab ||
+                    colaborador.pix_colab ||
+                    '—'}
+                </p>
+
+                <p className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-green-600">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Colaborador ativo
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={abrirEdicao}
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700"
+              >
+                <Pencil className="h-4 w-4" />
+                Editar
+              </button>
+            </div>
           </article>
         </div>
+
+        {sucessoDados && (
+          <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-700">
+            {sucessoDados}
+          </div>
+        )}
+
+        {editandoDados && (
+          <article className="mt-6 rounded-2xl border border-blue-200 bg-white p-6 shadow-sm sm:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-bold uppercase tracking-wider text-blue-600">
+                  Atualização cadastral
+                </p>
+
+                <h2 className="mt-1 text-2xl font-black text-slate-900">
+                  Editar meus dados
+                </h2>
+
+                <p className="mt-2 text-sm text-slate-500">
+                  Nome, CPF e código do colaborador não podem ser alterados aqui.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={cancelarEdicao}
+                className="rounded-xl border border-slate-200 p-2.5 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                aria-label="Fechar edição"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={salvarDados}
+              className="mt-6"
+            >
+              <div className="grid gap-5 md:grid-cols-2">
+                <label className="block">
+                  <span className="text-sm font-bold text-slate-700">
+                    E-mail
+                  </span>
+
+                  <input
+                    type="email"
+                    required
+                    value={formulario.email_colab}
+                    onChange={(evento) => {
+                      setFormulario(
+                        (atual) => ({
+                          ...atual,
+                          email_colab:
+                            evento.target.value,
+                        })
+                      );
+                    }}
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-sm font-bold text-slate-700">
+                    Telefone com DDD
+                  </span>
+
+                  <input
+                    type="tel"
+                    required
+                    value={formulario.tel_colab}
+                    onChange={(evento) => {
+                      setFormulario(
+                        (atual) => ({
+                          ...atual,
+                          tel_colab:
+                            evento.target.value,
+                        })
+                      );
+                    }}
+                    placeholder="21999999999"
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  />
+                </label>
+
+                <label className="block md:col-span-2">
+                  <span className="text-sm font-bold text-slate-700">
+                    Chave PIX
+                  </span>
+
+                  <input
+                    type="text"
+                    required
+                    value={formulario.pix_colab}
+                    onChange={(evento) => {
+                      setFormulario(
+                        (atual) => ({
+                          ...atual,
+                          pix_colab:
+                            evento.target.value,
+                        })
+                      );
+                    }}
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-7 rounded-2xl bg-slate-50 p-5">
+                <div className="flex items-center gap-2">
+                  <KeyRound className="h-5 w-5 text-slate-600" />
+
+                  <h3 className="font-black text-slate-900">
+                    Alterar senha
+                  </h3>
+                </div>
+
+                <p className="mt-1 text-sm text-slate-500">
+                  Deixe estes campos vazios se não quiser trocar a senha.
+                </p>
+
+                <div className="mt-4 grid gap-5 md:grid-cols-3">
+                  <label className="block">
+                    <span className="text-sm font-bold text-slate-700">
+                      Senha atual
+                    </span>
+
+                    <input
+                      type="password"
+                      value={formulario.senha_atual}
+                      onChange={(evento) => {
+                        setFormulario(
+                          (atual) => ({
+                            ...atual,
+                            senha_atual:
+                              evento.target.value,
+                          })
+                        );
+                      }}
+                      autoComplete="current-password"
+                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="text-sm font-bold text-slate-700">
+                      Nova senha
+                    </span>
+
+                    <input
+                      type="password"
+                      value={formulario.nova_senha}
+                      onChange={(evento) => {
+                        setFormulario(
+                          (atual) => ({
+                            ...atual,
+                            nova_senha:
+                              evento.target.value,
+                          })
+                        );
+                      }}
+                      autoComplete="new-password"
+                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="text-sm font-bold text-slate-700">
+                      Confirmar nova senha
+                    </span>
+
+                    <input
+                      type="password"
+                      value={formulario.confirmar_senha}
+                      onChange={(evento) => {
+                        setFormulario(
+                          (atual) => ({
+                            ...atual,
+                            confirmar_senha:
+                              evento.target.value,
+                          })
+                        );
+                      }}
+                      autoComplete="new-password"
+                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {erroDados && (
+                <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
+                  {erroDados}
+                </div>
+              )}
+
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button
+                  type="submit"
+                  disabled={salvandoDados}
+                  className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-6 py-3 font-bold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {salvandoDados ? (
+                    <RefreshCw className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Save className="h-5 w-5" />
+                  )}
+
+                  {salvandoDados
+                    ? 'Salvando...'
+                    : 'Salvar alterações'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={cancelarEdicao}
+                  disabled={salvandoDados}
+                  className="rounded-xl border border-slate-300 bg-white px-6 py-3 font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </article>
+        )}
 
         {/* Vendas */}
         {!carregando &&
