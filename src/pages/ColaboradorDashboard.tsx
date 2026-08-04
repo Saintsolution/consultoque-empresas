@@ -217,8 +217,8 @@ function formatarStatus(
 
   return (
     nomes[texto] ||
-    texto.replaceAll(
-      '_',
+    texto.replace(
+      /_/g,
       ' '
     ) ||
     '—'
@@ -353,6 +353,9 @@ export default function ColaboradorDashboard() {
       return;
     }
 
+    const colaboradorAtual =
+      colaborador;
+
     let cancelado =
       false;
 
@@ -397,7 +400,7 @@ export default function ColaboradorDashboard() {
               body:
                 JSON.stringify({
                   cod_colab:
-                    colaborador
+                    colaboradorAtual
                       .cod_colab,
                 }),
             }
