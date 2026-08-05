@@ -29,6 +29,11 @@ import {
   isValidEmail,
   BULK_THRESHOLD,
 } from '@/lib/pricing';
+import {
+  calcularIdade,
+  somenteNumerosCpf,
+  validarCpf,
+} from '@/lib/cpf';
 
 /*
  * Endpoint publicado do fluxo coletivo empresarial no n8n.
@@ -36,15 +41,11 @@ import {
 const WEBHOOK_URL =
   'https://n8n.saintsolution.com.br/webhook/coletivo-empresarial';
 
+const WEBHOOK_VALIDAR_CPF =
+  'https://n8n.saintsolution.com.br/webhook/validar-cpf-cadastro';
+
 const CHAVE_INDICADOR = 'indicador_colab';
 const COOKIE_INDICADOR = 'indicador_colab';
-
-/*
- * Liberação temporária para os testes do fluxo completo.
- * Amanhã, ao religar o validador, estes dois indicadores devem voltar
- * a refletir o resultado real da consulta de CPF e maioridade.
- */
-const CPF_VALIDATION_TEMPORARILY_DISABLED = true;
 
 function getCookie(name: string): string | null {
   const prefix = `${name}=`;
@@ -97,6 +98,30 @@ interface PaymentResponse {
   email: string;
 }
 
+interface CpfValidationResponse {
+  status: string;
+  sucesso: boolean;
+  cpf_validado: boolean;
+  cpf: string;
+  origem: string;
+  nome: string;
+  nascimento: string;
+  idade: number | null;
+  maior_idade: boolean;
+  consulta_id: string;
+  mensagem: string;
+}
+
+function birthDateToInput(value: string): string {
+  const match = String(value ?? '').match(
+    /^(\d{2})\/(\d{2})\/(\d{4})$/
+  );
+
+  return match
+    ? `${match[3]}-${match[2]}-${match[1]}`
+    : value;
+}
+
 function newHolder(): HolderField {
   return {
     id: crypto.randomUUID(),
@@ -143,6 +168,12 @@ export default function FormColetivo() {
   const [responsibleEmail, setResponsibleEmail] = useState('');
   const [responsiblePhone, setResponsiblePhone] = useState('');
   const [responsibleSaved, setResponsibleSaved] = useState(false);
+  const [validatingResponsibleCpf, setValidatingResponsibleCpf] =
+    useState(false);
+  const [responsibleCpfValidation, setResponsibleCpfValidation] =
+    useState<CpfValidationResponse | null>(null);
+  const [responsibleCpfError, setResponsibleCpfError] =
+    useState<string | null>(null);
   const [responsibleFormError, setResponsibleFormError] =
     useState<string | null>(null);
   const [holders, setHolders] = useState<HolderField[]>([]);
@@ -181,10 +212,95 @@ export default function FormColetivo() {
 
   const isValid = validation.length === 0;
 
+  function changeResponsibleCpf(value: string) {
+    const formatted = formatCPF(value);
+
+    setResponsibleCpf(formatted);
+    setResponsibleCpfValidation(null);
+    setResponsibleCpfError(null);
+    setResponsibleName('');
+    setResponsibleBirthDate('');
+  }
+
+  async function validateResponsibleCpf() {
+    const cpf = somenteNumerosCpf(responsibleCpf);
+
+    if (!validarCpf(cpf)) {
+      setResponsibleCpfError('Informe um CPF válido.');
+      setResponsibleCpfValidation(null);
+      return;
+    }
+
+    setValidatingResponsibleCpf(true);
+    setResponsibleCpfError(null);
+    setResponsibleFormError(null);
+
+    try {
+      const response = await fetch(WEBHOOK_VALIDAR_CPF, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          cpf,
+          origem: 'ASSOCIADO',
+        }),
+      });
+
+      const rawResult = (await response.json().catch(() => null)) as
+        | CpfValidationResponse
+        | CpfValidationResponse[]
+        | null;
+
+      const result = Array.isArray(rawResult)
+        ? rawResult[0]
+        : rawResult;
+
+      if (
+        !response.ok ||
+        !result?.sucesso ||
+        !result.cpf_validado ||
+        !result.maior_idade
+      ) {
+        throw new Error(
+          result?.mensagem ||
+            'Não foi possível validar o CPF.'
+        );
+      }
+
+      if (somenteNumerosCpf(result.cpf) !== cpf) {
+        throw new Error(
+          'O CPF retornado não corresponde ao CPF informado.'
+        );
+      }
+
+      setResponsibleCpfValidation(result);
+      setResponsibleName(result.nome);
+      setResponsibleBirthDate(
+        birthDateToInput(result.nascimento)
+      );
+    } catch (error) {
+      setResponsibleCpfValidation(null);
+      setResponsibleName('');
+      setResponsibleBirthDate('');
+      setResponsibleCpfError(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível validar o CPF.'
+      );
+    } finally {
+      setValidatingResponsibleCpf(false);
+    }
+  }
+
   function saveResponsible() {
     const errors: string[] = [];
 
     if (cnpj && !isValidCNPJ(cnpj)) errors.push('CNPJ inválido.');
+    if (!responsibleCpfValidation?.cpf_validado)
+      errors.push('Valide o CPF do responsável.');
+    if (!responsibleCpfValidation?.maior_idade)
+      errors.push('O responsável precisa ter pelo menos 18 anos.');
     if (!responsibleName.trim()) errors.push('Informe o nome.');
     if (onlyDigits(responsibleCpf).length !== 11)
       errors.push('Informe os 11 dígitos do CPF.');
@@ -215,6 +331,9 @@ export default function FormColetivo() {
     setResponsibleBirthDate('');
     setResponsibleEmail('');
     setResponsiblePhone('');
+    setResponsibleCpfValidation(null);
+    setResponsibleCpfError(null);
+    setValidatingResponsibleCpf(false);
     setResponsibleSaved(false);
     setResponsibleFormError(null);
   }
@@ -241,6 +360,33 @@ export default function FormColetivo() {
     );
   }
 
+  function updateHolderCpf(value: string) {
+    const formatted = formatCPF(value);
+
+    setHolderDraft((current) => {
+      if (!current) return current;
+
+      const cpfChanged =
+        somenteNumerosCpf(current.cpf) !==
+        somenteNumerosCpf(formatted);
+
+      return {
+        ...current,
+        cpf: formatted,
+        ...(cpfChanged
+          ? {
+              name: '',
+              email: '',
+              phone: '',
+              birthDate: '',
+            }
+          : {}),
+      };
+    });
+
+    setHolderFormError(null);
+  }
+
   function cancelHolder() {
     setHolderDraft(null);
     setHolderFormError(null);
@@ -251,8 +397,8 @@ export default function FormColetivo() {
 
     const errors: string[] = [];
     if (!holderDraft.name.trim()) errors.push('Informe o nome.');
-    if (onlyDigits(holderDraft.cpf).length !== 11)
-      errors.push('Informe os 11 dígitos do CPF.');
+    if (!validarCpf(holderDraft.cpf))
+      errors.push('Informe um CPF válido.');
     if (!holderDraft.birthDate) errors.push('Informe o nascimento.');
     if (!isValidEmail(holderDraft.email)) errors.push('Informe um e-mail válido.');
     if (onlyDigits(holderDraft.phone).length < 10)
@@ -508,8 +654,12 @@ export default function FormColetivo() {
       empresa: companyName.trim(),
       cnpj: onlyDigits(cnpj),
 
-      assoc_cpf_validado: CPF_VALIDATION_TEMPORARILY_DISABLED,
-      assoc_maior_idade: true,
+      assoc_cpf_validado:
+        Boolean(responsibleCpfValidation?.cpf_validado),
+      assoc_maior_idade:
+        Boolean(responsibleCpfValidation?.maior_idade),
+      assoc_consulta_id:
+        responsibleCpfValidation?.consulta_id || '',
 
       qtd_individual: breakdown.individualCount,
       qtd_familiar: breakdown.familyCount,
@@ -718,19 +868,6 @@ export default function FormColetivo() {
                       />
                     </div>
                     <div>
-                      <label className="label-field" htmlFor="responsibleName">
-                        Nome do responsável pelo pagamento
-                      </label>
-                      <input
-                        id="responsibleName"
-                        type="text"
-                        value={responsibleName}
-                        onChange={(e) => setResponsibleName(e.target.value)}
-                        className="input-field"
-                        placeholder="Nome completo"
-                      />
-                    </div>
-                    <div>
                       <label className="label-field" htmlFor="responsibleCpf">
                         CPF do responsável
                       </label>
@@ -739,15 +876,56 @@ export default function FormColetivo() {
                         type="text"
                         inputMode="numeric"
                         value={responsibleCpf}
-                        onChange={(e) =>
-                          setResponsibleCpf(formatCPF(e.target.value))
-                        }
+                        onChange={(e) => changeResponsibleCpf(e.target.value)}
                         className="input-field"
                         placeholder="000.000.000-00"
+                        disabled={validatingResponsibleCpf}
                       />
-                      <p className="mt-2 text-xs font-semibold text-amber-600">
-                        Validação de CPF temporariamente liberada para testes.
-                      </p>
+                      <button
+                        type="button"
+                        onClick={validateResponsibleCpf}
+                        disabled={
+                          validatingResponsibleCpf ||
+                          !validarCpf(responsibleCpf)
+                        }
+                        className="mt-2 inline-flex items-center gap-2 rounded-xl bg-ocean-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-ocean-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {validatingResponsibleCpf ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <ShieldCheck className="h-4 w-4" />
+                        )}
+                        {validatingResponsibleCpf
+                          ? 'Consultando...'
+                          : 'Validar CPF'}
+                      </button>
+
+                      {responsibleCpfValidation?.cpf_validado && (
+                        <p className="mt-2 flex items-center gap-1.5 text-xs font-bold text-mint-700">
+                          <CheckCircle2 className="h-4 w-4" />
+                          CPF validado com sucesso.
+                        </p>
+                      )}
+
+                      {responsibleCpfError && (
+                        <p className="mt-2 text-xs font-semibold text-red-600">
+                          {responsibleCpfError}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="label-field" htmlFor="responsibleName">
+                        Nome do responsável pelo pagamento
+                      </label>
+                      <input
+                        id="responsibleName"
+                        type="text"
+                        value={responsibleName}
+                        readOnly
+                        disabled={!responsibleCpfValidation?.cpf_validado}
+                        className="input-field disabled:cursor-not-allowed disabled:bg-slate-100"
+                        placeholder="Preenchido após validar o CPF"
+                      />
                     </div>
                     <div>
                       <label className="label-field" htmlFor="responsibleEmail">
@@ -758,7 +936,8 @@ export default function FormColetivo() {
                         type="email"
                         value={responsibleEmail}
                         onChange={(e) => setResponsibleEmail(e.target.value)}
-                        className="input-field"
+                        disabled={!responsibleCpfValidation?.cpf_validado}
+                        className="input-field disabled:cursor-not-allowed disabled:bg-slate-100"
                         placeholder="responsavel@empresa.com"
                       />
                     </div>
@@ -774,7 +953,8 @@ export default function FormColetivo() {
                         onChange={(e) =>
                           setResponsiblePhone(formatPhone(e.target.value))
                         }
-                        className="input-field"
+                        disabled={!responsibleCpfValidation?.cpf_validado}
+                        className="input-field disabled:cursor-not-allowed disabled:bg-slate-100"
                         placeholder="(00) 00000-0000"
                       />
                     </div>
@@ -789,8 +969,9 @@ export default function FormColetivo() {
                         id="responsibleBirthDate"
                         type="date"
                         value={responsibleBirthDate}
-                        onChange={(e) => setResponsibleBirthDate(e.target.value)}
-                        className="input-field"
+                        readOnly
+                        disabled={!responsibleCpfValidation?.cpf_validado}
+                        className="input-field disabled:cursor-not-allowed disabled:bg-slate-100"
                       />
                     </div>
                   </div>
@@ -805,6 +986,7 @@ export default function FormColetivo() {
                     <button
                       type="button"
                       onClick={saveResponsible}
+                      disabled={!responsibleCpfValidation?.cpf_validado}
                       className="btn-primary"
                     >
                       <CheckCircle2 className="h-4 w-4" />
@@ -984,21 +1166,6 @@ export default function FormColetivo() {
                     </div>
 
                     <div className="mt-4 space-y-4">
-                      <div>
-                        <label className="label-field">
-                          Nome do titular
-                        </label>
-                        <input
-                          type="text"
-                          value={holderDraft.name}
-                          onChange={(e) =>
-                            updateHolderDraft({ name: e.target.value })
-                          }
-                          className="input-field"
-                          placeholder="Nome completo do titular"
-                        />
-                      </div>
-
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div>
                           <label className="label-field">CPF do titular</label>
@@ -1006,13 +1173,40 @@ export default function FormColetivo() {
                             type="text"
                             inputMode="numeric"
                             value={holderDraft.cpf}
-                            onChange={(e) =>
-                              updateHolderDraft({
-                                cpf: formatCPF(e.target.value),
-                              })
-                            }
+                            onChange={(e) => updateHolderCpf(e.target.value)}
                             className="input-field"
                             placeholder="000.000.000-00"
+                          />
+
+                          {somenteNumerosCpf(holderDraft.cpf).length === 11 &&
+                            validarCpf(holderDraft.cpf) && (
+                              <p className="mt-2 flex items-center gap-1.5 text-xs font-bold text-mint-700">
+                                <CheckCircle2 className="h-4 w-4" />
+                                CPF numericamente válido.
+                              </p>
+                            )}
+
+                          {somenteNumerosCpf(holderDraft.cpf).length === 11 &&
+                            !validarCpf(holderDraft.cpf) && (
+                              <p className="mt-2 text-xs font-semibold text-red-600">
+                                Informe um CPF válido.
+                              </p>
+                            )}
+                        </div>
+
+                        <div>
+                          <label className="label-field">
+                            Nome do titular
+                          </label>
+                          <input
+                            type="text"
+                            value={holderDraft.name}
+                            onChange={(e) =>
+                              updateHolderDraft({ name: e.target.value })
+                            }
+                            disabled={!validarCpf(holderDraft.cpf)}
+                            className="input-field disabled:cursor-not-allowed disabled:bg-slate-100"
+                            placeholder="Nome completo do titular"
                           />
                         </div>
 
@@ -1028,8 +1222,15 @@ export default function FormColetivo() {
                                 birthDate: e.target.value,
                               })
                             }
-                            className="input-field"
+                            disabled={!validarCpf(holderDraft.cpf)}
+                            className="input-field disabled:cursor-not-allowed disabled:bg-slate-100"
                           />
+                          {holderDraft.birthDate &&
+                            calcularIdade(holderDraft.birthDate) !== null && (
+                              <p className="mt-2 text-xs font-semibold text-ocean-500">
+                                Idade: {calcularIdade(holderDraft.birthDate)} anos
+                              </p>
+                            )}
                         </div>
 
                         <div>
@@ -1044,7 +1245,8 @@ export default function FormColetivo() {
                                 email: e.target.value,
                               })
                             }
-                            className="input-field"
+                            disabled={!validarCpf(holderDraft.cpf)}
+                            className="input-field disabled:cursor-not-allowed disabled:bg-slate-100"
                             placeholder="titular@email.com"
                           />
                         </div>
@@ -1062,7 +1264,8 @@ export default function FormColetivo() {
                                 phone: formatPhone(e.target.value),
                               })
                             }
-                            className="input-field"
+                            disabled={!validarCpf(holderDraft.cpf)}
+                            className="input-field disabled:cursor-not-allowed disabled:bg-slate-100"
                             placeholder="(00) 00000-0000"
                           />
                         </div>
@@ -1086,6 +1289,7 @@ export default function FormColetivo() {
                       <button
                         type="button"
                         onClick={saveHolder}
+                        disabled={!validarCpf(holderDraft.cpf)}
                         className="btn-primary"
                       >
                         <CheckCircle2 className="h-4 w-4" />
