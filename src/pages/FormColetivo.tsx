@@ -849,7 +849,8 @@ export default function FormColetivo() {
                         type="text"
                         value={companyName}
                         onChange={(e) => setCompanyName(e.target.value)}
-                        className="input-field"
+                        disabled={!responsibleCpfValidation?.cpf_validado}
+                        className="input-field disabled:cursor-not-allowed disabled:bg-slate-100"
                         placeholder="Razão social ou nome fantasia, se houver"
                       />
                     </div>
@@ -863,7 +864,8 @@ export default function FormColetivo() {
                         inputMode="numeric"
                         value={cnpj}
                         onChange={(e) => setCnpj(formatCNPJ(e.target.value))}
-                        className="input-field"
+                        disabled={!responsibleCpfValidation?.cpf_validado}
+                        className="input-field disabled:cursor-not-allowed disabled:bg-slate-100"
                         placeholder="00.000.000/0000-00"
                       />
                     </div>

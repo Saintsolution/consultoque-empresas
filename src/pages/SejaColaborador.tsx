@@ -24,8 +24,16 @@ import {
   UserPlus,
 } from 'lucide-react';
 
+import {
+  somenteNumerosCpf,
+  validarCpf,
+} from '@/lib/cpf';
+
 const WEBHOOK_CADASTRO =
   'https://n8n.saintsolution.com.br/webhook/colaborador-cadastro';
+
+const WEBHOOK_VALIDAR_CPF =
+  'https://n8n.saintsolution.com.br/webhook/validar-cpf-cadastro';
 
 type FormularioColaborador = {
   nome_colab: string;
@@ -46,6 +54,20 @@ type RespostaCadastro = {
   cod_colab?: string | number;
   cod_pai?: string | number;
   link_indicacao?: string;
+};
+
+type RespostaValidacaoCpf = {
+  status?: string;
+  sucesso?: boolean;
+  cpf_validado?: boolean;
+  cpf?: string;
+  origem?: string;
+  nome?: string;
+  nascimento?: string;
+  idade?: number | null;
+  maior_idade?: boolean;
+  consulta_id?: string;
+  mensagem?: string;
 };
 
 const formularioInicial:
@@ -187,67 +209,6 @@ function buscarCodigoPai() {
   );
 }
 
-function validarCPF(
-  cpf: string
-) {
-  const numeros =
-    somenteNumeros(cpf);
-
-  if (numeros.length !== 11) {
-    return false;
-  }
-
-  if (
-    /^(\d)\1{10}$/.test(
-      numeros
-    )
-  ) {
-    return false;
-  }
-
-  function calcularDigito(
-    quantidade: number
-  ) {
-    let soma = 0;
-
-    for (
-      let indice = 0;
-      indice < quantidade;
-      indice += 1
-    ) {
-      soma +=
-        Number(
-          numeros[indice]
-        ) *
-        (
-          quantidade +
-          1 -
-          indice
-        );
-    }
-
-    const resto =
-      (soma * 10) % 11;
-
-    return resto === 10
-      ? 0
-      : resto;
-  }
-
-  const primeiroDigito =
-    calcularDigito(9);
-
-  const segundoDigito =
-    calcularDigito(10);
-
-  return (
-    primeiroDigito ===
-      Number(numeros[9]) &&
-    segundoDigito ===
-      Number(numeros[10])
-  );
-}
-
 export default function SejaColaborador() {
   const [
     formulario,
@@ -265,6 +226,24 @@ export default function SejaColaborador() {
   const [
     erro,
     setErro,
+  ] = useState('');
+
+  const [
+    validandoCpf,
+    setValidandoCpf,
+  ] = useState(false);
+
+  const [
+    validacaoCpf,
+    setValidacaoCpf,
+  ] =
+    useState<RespostaValidacaoCpf | null>(
+      null
+    );
+
+  const [
+    erroCpf,
+    setErroCpf,
   ] = useState('');
 
   const [
@@ -311,6 +290,127 @@ export default function SejaColaborador() {
     );
 
     setErro('');
+  }
+
+  function atualizarCpf(
+    valor: string
+  ) {
+    setFormulario({
+      ...formularioInicial,
+      cpf_colab:
+        formatarCPF(valor),
+    });
+
+    setValidacaoCpf(null);
+    setErroCpf('');
+    setErro('');
+  }
+
+  async function validarCpfColaborador() {
+    const cpf =
+      somenteNumerosCpf(
+        formulario.cpf_colab
+      );
+
+    if (!validarCpf(cpf)) {
+      setErroCpf(
+        'Informe um CPF válido.'
+      );
+      setValidacaoCpf(null);
+      return;
+    }
+
+    setValidandoCpf(true);
+    setErroCpf('');
+    setErro('');
+
+    try {
+      const resposta =
+        await fetch(
+          WEBHOOK_VALIDAR_CPF,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+            body: JSON.stringify({
+              cpf,
+              origem:
+                'COLABORADOR',
+            }),
+          }
+        );
+
+      const bruto =
+        (await resposta
+          .json()
+          .catch(() => null)) as
+          | RespostaValidacaoCpf
+          | RespostaValidacaoCpf[]
+          | null;
+
+      const dados =
+        Array.isArray(bruto)
+          ? bruto[0]
+          : bruto;
+
+      if (
+        !resposta.ok ||
+        !dados?.sucesso ||
+        !dados.cpf_validado
+      ) {
+        throw new Error(
+          dados?.mensagem ||
+          'Não foi possível validar o CPF.'
+        );
+      }
+
+      if (
+        somenteNumerosCpf(
+          dados.cpf ?? ''
+        ) !== cpf
+      ) {
+        throw new Error(
+          'O CPF retornado não corresponde ao CPF informado.'
+        );
+      }
+
+      const nome =
+        String(
+          dados.nome ?? ''
+        ).trim();
+
+      if (!nome) {
+        throw new Error(
+          'A consulta não retornou o nome do colaborador.'
+        );
+      }
+
+      setValidacaoCpf(dados);
+      setFormulario(
+        (estadoAnterior) => ({
+          ...estadoAnterior,
+          nome_colab: nome,
+        })
+      );
+    } catch (erroRecebido) {
+      setValidacaoCpf(null);
+      setFormulario(
+        (estadoAnterior) => ({
+          ...estadoAnterior,
+          nome_colab: '',
+        })
+      );
+      setErroCpf(
+        erroRecebido
+          instanceof Error
+          ? erroRecebido.message
+          : 'Não foi possível validar o CPF.'
+      );
+    } finally {
+      setValidandoCpf(false);
+    }
   }
 
   function atualizarTelefone(
@@ -365,7 +465,16 @@ export default function SejaColaborador() {
       return 'Informe o nome completo.';
     }
 
-    if (!validarCPF(cpf)) {
+    if (
+      !validacaoCpf?.cpf_validado ||
+      somenteNumerosCpf(
+        validacaoCpf.cpf ?? ''
+      ) !== cpf
+    ) {
+      return 'Valide o CPF antes de continuar.';
+    }
+
+    if (!validarCpf(cpf)) {
       return 'Informe um CPF válido.';
     }
 
@@ -464,6 +573,14 @@ export default function SejaColaborador() {
           formulario.cpf_colab
         ),
 
+      cpf_validado: true,
+
+      cpf_consulta_id:
+        validacaoCpf?.consulta_id || '',
+
+      cpf_nascimento:
+        validacaoCpf?.nascimento || '',
+
       email_colab:
         formulario.email_colab
           .trim()
@@ -561,6 +678,9 @@ export default function SejaColaborador() {
       setFormulario(
         formularioInicial
       );
+
+      setValidacaoCpf(null);
+      setErroCpf('');
 
       window.scrollTo({
         top: 0,
@@ -809,34 +929,7 @@ export default function SejaColaborador() {
               </div>
 
               <div className="mt-7 grid gap-5 sm:grid-cols-2">
-                <label className="sm:col-span-2">
-                  <span className="mb-2 block text-sm font-semibold text-slate-700">
-                    Nome completo
-                  </span>
-
-                  <input
-                    type="text"
-                    required
-                    autoComplete="name"
-                    value={
-                      formulario
-                        .nome_colab
-                    }
-                    onChange={(
-                      evento
-                    ) =>
-                      atualizarCampo(
-                        'nome_colab',
-                        evento.target
-                          .value
-                      )
-                    }
-                    placeholder="Digite seu nome completo"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-mint-500 focus:ring-4 focus:ring-mint-500/10"
-                  />
-                </label>
-
-                <label>
+                <div className="sm:col-span-2">
                   <span className="mb-2 block text-sm font-semibold text-slate-700">
                     CPF
                   </span>
@@ -853,16 +946,69 @@ export default function SejaColaborador() {
                     onChange={(
                       evento
                     ) =>
-                      atualizarCampo(
-                        'cpf_colab',
-                        formatarCPF(
-                          evento.target
-                            .value
-                        )
+                      atualizarCpf(
+                        evento.target
+                          .value
                       )
                     }
                     placeholder="000.000.000-00"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-mint-500 focus:ring-4 focus:ring-mint-500/10"
+                    disabled={validandoCpf}
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-mint-500 focus:ring-4 focus:ring-mint-500/10 disabled:cursor-not-allowed disabled:bg-slate-100"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={validarCpfColaborador}
+                    disabled={
+                      validandoCpf ||
+                      !validarCpf(
+                        formulario.cpf_colab
+                      )
+                    }
+                    className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {validandoCpf ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4" />
+                    )}
+
+                    {validandoCpf
+                      ? 'Consultando...'
+                      : 'Confirmar CPF e continuar'}
+                  </button>
+
+                  {validacaoCpf?.cpf_validado && (
+                    <p className="mt-2 flex items-center gap-1.5 text-sm font-bold text-mint-600">
+                      <CheckCircle2 className="h-4 w-4" />
+                      CPF validado com sucesso.
+                    </p>
+                  )}
+
+                  {erroCpf && (
+                    <p className="mt-2 text-sm font-semibold text-red-600">
+                      {erroCpf}
+                    </p>
+                  )}
+                </div>
+
+                <label className="sm:col-span-2">
+                  <span className="mb-2 block text-sm font-semibold text-slate-700">
+                    Nome completo
+                  </span>
+
+                  <input
+                    type="text"
+                    required
+                    readOnly
+                    autoComplete="name"
+                    value={
+                      formulario
+                        .nome_colab
+                    }
+                    disabled={!validacaoCpf?.cpf_validado}
+                    placeholder="Preenchido após validar o CPF"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-mint-500 focus:ring-4 focus:ring-mint-500/10 disabled:cursor-not-allowed disabled:bg-slate-100"
                   />
                 </label>
 
@@ -874,6 +1020,7 @@ export default function SejaColaborador() {
                   <input
                     type="tel"
                     required
+                    disabled={!validacaoCpf?.cpf_validado}
                     inputMode="tel"
                     autoComplete="tel-national"
                     maxLength={15}
@@ -889,7 +1036,7 @@ export default function SejaColaborador() {
                       )
                     }
                     placeholder="(21) 99999-9999"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-mint-500 focus:ring-4 focus:ring-mint-500/10"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-mint-500 focus:ring-4 focus:ring-mint-500/10 disabled:cursor-not-allowed disabled:bg-slate-100"
                   />
 
                   <small className="mt-1.5 block text-xs font-medium text-slate-500">
@@ -905,6 +1052,7 @@ export default function SejaColaborador() {
                   <input
                     type="email"
                     required
+                    disabled={!validacaoCpf?.cpf_validado}
                     autoComplete="email"
                     value={
                       formulario
@@ -920,7 +1068,7 @@ export default function SejaColaborador() {
                       )
                     }
                     placeholder="seuemail@exemplo.com"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-mint-500 focus:ring-4 focus:ring-mint-500/10"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-mint-500 focus:ring-4 focus:ring-mint-500/10 disabled:cursor-not-allowed disabled:bg-slate-100"
                   />
                 </label>
 
@@ -932,6 +1080,7 @@ export default function SejaColaborador() {
                   <input
                     type="text"
                     required
+                    disabled={!validacaoCpf?.cpf_validado}
                     autoComplete="off"
                     value={
                       formulario
@@ -947,7 +1096,7 @@ export default function SejaColaborador() {
                       )
                     }
                     placeholder="CPF, e-mail, telefone ou chave aleatória"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-mint-500 focus:ring-4 focus:ring-mint-500/10"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-mint-500 focus:ring-4 focus:ring-mint-500/10 disabled:cursor-not-allowed disabled:bg-slate-100"
                   />
 
                   <span className="mt-1.5 block text-xs text-slate-500">
@@ -972,6 +1121,7 @@ export default function SejaColaborador() {
                           : 'password'
                       }
                       required
+                      disabled={!validacaoCpf?.cpf_validado}
                       minLength={8}
                       autoComplete="new-password"
                       value={
@@ -988,11 +1138,12 @@ export default function SejaColaborador() {
                         )
                       }
                       placeholder="Mínimo de 8 caracteres"
-                      className="w-full rounded-xl border border-slate-300 py-3 pl-11 pr-12 text-slate-900 outline-none transition focus:border-mint-500 focus:ring-4 focus:ring-mint-500/10"
+                      className="w-full rounded-xl border border-slate-300 py-3 pl-11 pr-12 text-slate-900 outline-none transition focus:border-mint-500 focus:ring-4 focus:ring-mint-500/10 disabled:cursor-not-allowed disabled:bg-slate-100"
                     />
 
                     <button
                       type="button"
+                      disabled={!validacaoCpf?.cpf_validado}
                       onClick={() =>
                         setMostrarSenha(
                           (valor) =>
@@ -1004,7 +1155,7 @@ export default function SejaColaborador() {
                           ? 'Ocultar senha'
                           : 'Mostrar senha'
                       }
-                      className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {mostrarSenha ? (
                         <EyeOff className="h-4 w-4" />
@@ -1030,6 +1181,7 @@ export default function SejaColaborador() {
                           : 'password'
                       }
                       required
+                      disabled={!validacaoCpf?.cpf_validado}
                       minLength={8}
                       autoComplete="new-password"
                       value={
@@ -1046,11 +1198,12 @@ export default function SejaColaborador() {
                         )
                       }
                       placeholder="Digite novamente"
-                      className="w-full rounded-xl border border-slate-300 py-3 pl-11 pr-12 text-slate-900 outline-none transition focus:border-mint-500 focus:ring-4 focus:ring-mint-500/10"
+                      className="w-full rounded-xl border border-slate-300 py-3 pl-11 pr-12 text-slate-900 outline-none transition focus:border-mint-500 focus:ring-4 focus:ring-mint-500/10 disabled:cursor-not-allowed disabled:bg-slate-100"
                     />
 
                     <button
                       type="button"
+                      disabled={!validacaoCpf?.cpf_validado}
                       onClick={() =>
                         setMostrarConfirmacao(
                           (valor) =>
@@ -1062,7 +1215,7 @@ export default function SejaColaborador() {
                           ? 'Ocultar confirmação'
                           : 'Mostrar confirmação'
                       }
-                      className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {mostrarConfirmacao ? (
                         <EyeOff className="h-4 w-4" />
@@ -1077,6 +1230,7 @@ export default function SejaColaborador() {
               <label className="mt-7 flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <input
                   type="checkbox"
+                  disabled={!validacaoCpf?.cpf_validado}
                   checked={
                     formulario
                       .termos_aceitos
@@ -1090,7 +1244,7 @@ export default function SejaColaborador() {
                         .checked
                     )
                   }
-                  className="mt-1 h-4 w-4 shrink-0 accent-mint-500"
+                  className="mt-1 h-4 w-4 shrink-0 accent-mint-500 disabled:cursor-not-allowed disabled:opacity-50"
                 />
 
                 <span className="text-sm leading-relaxed text-slate-600">
@@ -1120,7 +1274,10 @@ export default function SejaColaborador() {
 
               <button
                 type="submit"
-                disabled={enviando}
+                disabled={
+                  enviando ||
+                  !validacaoCpf?.cpf_validado
+                }
                 className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-mint-500 px-6 py-4 text-base font-bold text-white shadow-lg transition hover:bg-mint-600 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {enviando ? (
