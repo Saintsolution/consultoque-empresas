@@ -26,6 +26,16 @@ const navLinks = [
     label: 'Institucional',
     href: '/#institucional',
   },
+  {
+    label: 'Área do Associado',
+    href: '/associado',
+    acesso: true,
+  },
+  {
+    label: 'Área do Colaborador',
+    href: '/colaborador',
+    acesso: true,
+  },
 ];
 
 export default function Header() {
@@ -77,7 +87,11 @@ export default function Header() {
                   to={
                     link.href
                   }
-                  className="header-nav-link"
+                  className={
+                    link.acesso
+                      ? 'header-nav-link header-access-link'
+                      : 'header-nav-link'
+                  }
                 >
                   {
                     link.label
@@ -137,7 +151,11 @@ export default function Header() {
                       false
                     )
                   }
-                  className="header-mobile-link"
+                  className={
+                    link.acesso
+                      ? 'header-mobile-link header-mobile-access-link'
+                      : 'header-mobile-link'
+                  }
                 >
                   {
                     link.label
@@ -157,26 +175,43 @@ export default function Header() {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 42px;
+            gap: 24px;
           }
 
           .header-nav-link {
             color: #ffffff;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 800;
             line-height: 1;
             text-transform: uppercase;
-            letter-spacing: 0.04em;
+            letter-spacing: 0.035em;
             text-decoration: none;
             white-space: nowrap;
             transition:
               opacity 180ms ease,
-              transform 180ms ease;
+              transform 180ms ease,
+              background-color 180ms ease;
           }
 
           .header-nav-link:hover {
-            opacity: 0.76;
+            opacity: 0.82;
             transform: translateY(-1px);
+          }
+
+          /*
+           * As duas áreas de acesso ficam destacadas,
+           * mas continuam integradas à faixa verde.
+           */
+          .header-access-link {
+            padding: 9px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.32);
+            border-radius: 9px;
+            background: rgba(255, 255, 255, 0.10);
+          }
+
+          .header-access-link:hover {
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.20);
           }
 
           .header-mobile-control {
@@ -218,6 +253,22 @@ export default function Header() {
 
             .header-mobile-link:last-child {
               border-bottom: none;
+            }
+
+            /*
+             * Destaque das áreas de acesso dentro
+             * do menu sanduíche.
+             */
+            .header-mobile-access-link {
+              margin-top: 6px;
+              padding: 13px 12px;
+              border: 1px solid rgba(255, 255, 255, 0.22);
+              border-radius: 10px;
+              background: rgba(255, 255, 255, 0.10);
+            }
+
+            .header-mobile-access-link + .header-mobile-access-link {
+              margin-top: 8px;
             }
           }
         `}

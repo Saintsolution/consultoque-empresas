@@ -22,7 +22,6 @@ import Home from '@/pages/Home';
 import FormColetivo from '@/pages/FormColetivo';
 import Admin from '@/pages/Admin';
 
-import Associado from '@/pages/Associado';
 import AssociadoPage from '@/pages/AssociadoPage';
 import AssociadoDashboard from '@/pages/AssociadoDashboard';
 
@@ -159,15 +158,23 @@ function Layout({
    * Header nem Footer gerais.
    */
   const paginasExclusivas = [
-    '/formcoletivo',
-    '/seja-colaborador',
-    '/criar-senha',
-    '/colaborador',
-    '/colaborador/dashboard',
-    '/material-promocional',
-    '/panfletos-promocionais',
-    '/montar-folder',
-  ];
+  '/formcoletivo',
+  '/seja-colaborador',
+  '/criar-senha',
+
+  '/associado',
+  '/associado/inscricao',
+  '/associado/dashboard',
+
+  '/colaborador',
+  '/colaborador/dashboard',
+
+  '/admin',
+
+  '/material-promocional',
+  '/panfletos-promocionais',
+  '/montar-folder',
+];
 
   const paginaExclusiva =
     paginasExclusivas.includes(
@@ -223,14 +230,7 @@ export default function App() {
           <Route
             path="/admin"
             element={<Admin />}
-          />
-
-          {/* Área do associado */}
-          <Route
-            path="/associado/inscricao"
-            element={
-              <Associado />
-            }
+          
           />
 
           <Route
